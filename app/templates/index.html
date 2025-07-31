@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+
+{% block title %}SES Configuration - EmailFlow{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Styles specific to the SES Configuration page */
+    .header-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .header-section h1 {
+        font-size: 2rem;
+        font-weight: 500;
+        color: #2c3e50;
+    }
+    .add-button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    .add-button:hover {
+        background-color: #2980b9;
+    }
+    .table-responsive {
+        overflow-x: auto;
+        background: #ffffff;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    th, td {
+        padding: 1rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    th {
+        background-color: #f8f9fa;
+        font-weight: 500;
+        color: #495057;
+    }
+    .no-configs {
+        text-align: center;
+        color: #7f8c8d;
+        padding: 2rem;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.6);
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    }
+    .modal-content {
+        background: #fff;
+        padding: 2rem;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 500;
+    }
+    .close-button {
+        font-size: 2rem;
+        font-weight: 300;
+        cursor: pointer;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+    .form-group input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        box-sizing: border-box; /* Important */
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    .form-actions button {
+        padding: 0.75rem 1.5rem;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+    }
+    .cancel-button {
+        background-color: #e9ecef;
+        color: #495057;
+    }
+    .save-button {
+        background-color: #28a745;
+        color: white;
+    }
+    /* Flash Messages */
+    .flash-message {
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 5px;
+        text-align: center;
+    }
+    .flash-message.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .flash-message.error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-section">
+    <h1>Amazon SES Configuration</h1>
+    <button id="add-config-btn" class="add-button">+ Add SES Configuration</button>
+</div>
+
+<div id="flash-message-container">
+    {# Flash messages from JavaScript will appear here #}
+</div>
+
+<h2>Saved Configurations</h2>
+<div class="table-responsive">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Region</th>
+                <th>Sender Email</th>
+                <th>Created At</th>
+                <th>Updated At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in configs %}
+            <tr>
+                <td>{{ config.id }}</td>
+                <td>{{ config.aws_region }}</td>
+                <td>{{ config.sender_email }}</td>
+                <td>{{ config.created_at }}</td>
+                <td>{{ config.updated_at }}</td>
+            </tr>
+            {% endfor %}
+            {% if not configs %}
+            <tr>
+                <td colspan="5" class="no-configs">No SES configurations found.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<div id="config-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add New SES Configuration</h2>
+            <span class="close-button">&times;</span>
+        </div>
+        <form id="ses-config-form" class="modal-form">
+            <div class="form-group">
+                <label for="aws_access_key_id">AWS Access Key ID:</label>
+                <input type="text" id="aws_access_key_id" name="aws_access_key_id" required>
+            </div>
+            <div class="form-group">
+                <label for="aws_secret_access_key">AWS Secret Access Key:</label>
+                <input type="password" id="aws_secret_access_key" name="aws_secret_access_key" required>
+            </div>
+            <div class="form-group">
+                <label for="aws_region">AWS Region:</label>
+                <input type="text" id="aws_region" name="aws_region" required>
+            </div>
+            <div class="form-group">
+                <label for="sender_email">Sender Email:</label>
+                <input type="email" id="sender_email" name="sender_email" required>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="cancel-button">Cancel</button>
+                <button type="submit" class="save-button">Save Configuration</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const addConfigBtn = document.getElementById('add-config-btn');
+        const configModal = document.getElementById('config-modal');
+        const closeButton = configModal.querySelector('.close-button');
+        const cancelButton = configModal.querySelector('.cancel-button');
+        const sesConfigForm = document.getElementById('ses-config-form');
+        const flashMessageContainer = document.getElementById('flash-message-container');
+
+        function openModal() {
+            configModal.style.display = 'flex'; // Use flex to center
+            sesConfigForm.reset(); 
+            flashMessageContainer.innerHTML = '';
+        }
+
+        function closeModal() {
+            configModal.style.display = 'none';
+        }
+
+        addConfigBtn.addEventListener('click', openModal);
+        closeButton.addEventListener('click', closeModal);
+        cancelButton.addEventListener('click', closeModal);
+
+        window.addEventListener('click', (event) => {
+            if (event.target === configModal) {
+                closeModal();
+            }
+        });
+
+        sesConfigForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(sesConfigForm);
+            const response = await fetch('/ses/configure', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            displayFlashMessage(result.message || result.error, response.ok ? 'success' : 'error');
+
+            if (response.ok) {
+                closeModal();
+                setTimeout(() => location.reload(), 1500);
+            }
+        });
+
+        function displayFlashMessage(message, type) {
+            flashMessageContainer.innerHTML = `<div class="flash-message ${type}">${message}</div>`;
+            setTimeout(() => {
+                flashMessageContainer.innerHTML = '';
+            }, 3000);
+        }
+    });
+</script>
+{% endblock %}

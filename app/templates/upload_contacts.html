@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+
+{% block title %}Contact Lists - EmailFlow{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Styles specific to the Contact Lists page */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .page-header h1 {
+        font-size: 2rem;
+        font-weight: 500;
+        color: #2c3e50;
+        margin: 0;
+    }
+    .page-header p {
+        color: #7f8c8d;
+        margin-top: 0.5rem;
+    }
+    .btn {
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+    }
+    .btn-primary {
+        background-color: #3498db;
+        color: white;
+    }
+    .btn-primary:hover {
+        background-color: #2980b9;
+    }
+    .btn-secondary {
+        background-color: #95a5a6;
+        color: white;
+    }
+    .btn-secondary:hover {
+        background-color: #7f8c8d;
+    }
+    .btn i {
+        margin-right: 0.5rem;
+    }
+
+    /* Form Styles */
+    .form-container {
+        display: none; /* Initially hidden */
+        background-color: #fff;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        margin-bottom: 2rem;
+        border: 1px solid #e9ecef;
+    }
+    .form-container h2 {
+        font-size: 1.5rem;
+        font-weight: 500;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+    .form-group input[type="text"] {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        box-sizing: border-box;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+        border: 2px dashed #ced4da;
+        border-radius: 8px;
+        padding: 2.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.3s, background-color 0.3s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: #3498db;
+        background-color: #f0f8ff;
+    }
+    .drop-zone p {
+        color: #7f8c8d;
+    }
+    .drop-zone .highlight {
+        color: #3498db;
+        font-weight: 500;
+    }
+    input[type="file"].hidden {
+        display: none;
+    }
+
+    /* Table Styles */
+    .table-container {
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        overflow: hidden; /* For rounded corners on the table */
+        border: 1px solid #e9ecef;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    th, td {
+        padding: 1rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    thead {
+        background-color: #f8f9fa;
+    }
+    th {
+        font-weight: 500;
+        color: #495057;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+    .empty-row {
+        text-align: center;
+        color: #7f8c8d;
+        padding: 2rem;
+    }
+    /* Flash Messages */
+    .flash-message {
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 5px;
+    }
+    .flash-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    .flash-error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>My Contact Lists</h1>
+        <p>Create and manage your contact lists for campaigns.</p>
+    </div>
+    <button id="create-list-btn" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i>Create a New List
+    </button>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div>
+            {% for category, message in messages %}
+                <div class="flash-message {% if category == 'success' %}flash-success{% else %}flash-error{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+<div id="create-list-form" class="form-container">
+    <h2>Create New List from CSV</h2>
+    <form id="upload-form" method="POST" action="{{ url_for('contact.lists') }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="list_name">List Name:</label>
+            <input type="text" id="list_name" name="list_name" required placeholder="e.g., Newsletter Subscribers, Webinar Attendees">
+        </div>
+        <div class="form-group">
+            <label for="file">Upload CSV File:</label>
+            <div id="drop-zone" class="drop-zone">
+                <input type="file" id="file" name="file" accept=".csv" class="hidden" required>
+                <div id="drop-text">
+                    <i class="fas fa-cloud-upload-alt fa-3x" style="color: #bdc3c7; margin-bottom: 0.75rem;"></i>
+                    <p>Drag and drop your CSV file here or <span class="highlight">click to browse</span>.</p>
+                </div>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" id="cancel-list-btn" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create & Upload</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>List Name</th>
+                <th># of Records</th>
+                <th>Type</th>
+                <th>Created At</th>
+                <th>Created By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for list_item in lists %}
+            <tr>
+                <td>{{ list_item.list_name }}</td>
+                <td>{{ list_item.total_records }}</td>
+                <td>{{ list_item.list_type }}</td>
+                <td>{{ list_item.created_at.strftime('%Y-%m-%d %H:%M') if list_item.created_at else 'N/A' }}</td>
+                <td>{{ list_item.created_by }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="empty-row">No lists found. Create your first list!</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const createListBtn = document.getElementById('create-list-btn');
+        const createListForm = document.getElementById('create-list-form');
+        const cancelListBtn = document.getElementById('cancel-list-btn');
+        const uploadForm = document.getElementById('upload-form');
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file');
+        const dropText = document.getElementById('drop-text');
+        const originalDropText = dropText.innerHTML;
+
+        createListBtn.addEventListener('click', () => {
+            createListForm.style.display = 'block';
+        });
+
+        cancelListBtn.addEventListener('click', () => {
+            createListForm.style.display = 'none';
+            uploadForm.reset();
+            dropText.innerHTML = originalDropText;
+        });
+        
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                dropText.textContent = `File selected: ${fileInput.files[0].name}`;
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                dropText.textContent = `File selected: ${fileInput.files[0].name}`;
+            }
+        });
+    });
+</script>
+{% endblock %}

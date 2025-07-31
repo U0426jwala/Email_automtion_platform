@@ -1,0 +1,12 @@
+Flask
+python-dotenv
+boto3
+mysql-connector-python
+email-validator
+python-dotenv
+pandas
+Flask-Login
+Flask-WTF
+langchain-google-genai
+
+

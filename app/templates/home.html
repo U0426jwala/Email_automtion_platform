@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - EmailFlow{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Page-specific styles can go here */
+    .welcome-header h1 {
+        font-size: 2.2rem;
+        font-weight: 500;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+
+    .welcome-header p {
+        font-size: 1.1rem;
+        color: #7f8c8d;
+        margin-bottom: 2rem;
+    }
+
+    .stats-grid, .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2.5rem;
+    }
+
+    .stat-card .value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+    }
+
+    .stat-card .label {
+        font-size: 1rem;
+        color: #7f8c8d;
+        font-weight: 500;
+    }
+    
+    .stat-card .value .fa-check-circle { color: #2ecc71; }
+    .stat-card .value .fa-times-circle { color: #e74c3c; }
+
+    .action-card {
+        padding: 2rem;
+        text-align: left;
+    }
+
+    .action-card .icon {
+        font-size: 2rem;
+        color: #3498db;
+        margin-bottom: 1rem;
+    }
+
+    .action-card h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.2rem;
+        color: #2c3e50;
+    }
+
+    .action-card p {
+        font-size: 0.95rem;
+        color: #7f8c8d;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+
+    .action-card a {
+        text-decoration: none;
+        color: #3498db;
+        font-weight: 700;
+    }
+
+    .action-card a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="welcome-header">
+    <h1>Welcome to EmailFlow</h1>
+    <p>A powerful email management system to configure SES, manage contacts, and send emails with ease.</p>
+</div>
+
+<div class="stats-grid">
+    <div class="card stat-card">
+        <div class="value">{{ total_sent }}</div>
+        <div class="label">Total Emails Sent</div>
+    </div>
+    <div class="card stat-card">
+        <div class="value">
+            <i class="fas fa-check-circle"></i> {{ successfully_delivered }}
+        </div>
+        <div class="label">Successfully Delivered</div>
+    </div>
+    <div class="card stat-card">
+        <div class="value">
+            <i class="fas fa-times-circle"></i> {{ bounced_failed }}
+        </div>
+        <div class="label">Bounced/Failed</div>
+    </div>
+</div>
+
+<div class="actions-grid">
+    <div class="card action-card">
+        <div class="icon"><i class="fas fa-server"></i></div>
+        <h3>SES Configuration</h3>
+        <p>Configure and test your SES Configuration for sending emails.</p>
+        <a href="{{ url_for('ses.configure_ses') }}">Manage SES Configuration &rarr;</a>
+    </div>
+    <div class="card action-card">
+        <div class="icon"><i class="fas fa-users"></i></div>
+        <h3>Contacts</h3>
+        <p>Manage your contacts individually or import them from Excel.</p>
+        <a href="{{ url_for('contact.lists') }}">Manage Contacts &rarr;</a>
+    </div>
+    <div class="card action-card">
+        <div class="icon"><i class="fas fa-paper-plane"></i></div>
+        <h3>Campaigns</h3>
+        <p>Compose and send emails to your contacts using your SES.</p>
+        <a href="{{ url_for('campaign.campaign_list') }}">Manage Campaigns &rarr;</a>
+    </div>
+</div>
+{% endblock %}

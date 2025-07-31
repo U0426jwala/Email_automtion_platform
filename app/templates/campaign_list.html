@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Email Campaigns - EmailFlow{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Styles for the campaign list page */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .page-header h1 {
+        font-size: 2rem;
+        font-weight: 500;
+        color: #2c3e50;
+    }
+    .page-header p {
+        color: #7f8c8d;
+    }
+    .btn-primary {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    .btn-primary:hover {
+        background-color: #2980b9;
+    }
+    .table-container {
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        overflow: hidden;
+        border: 1px solid #e9ecef;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    th, td {
+        padding: 1rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    thead {
+        background-color: #f8f9fa;
+    }
+    th {
+        font-weight: 500;
+        color: #495057;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+    .action-link {
+        color: #3498db;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .action-link:hover {
+        text-decoration: underline;
+    }
+    .empty-state {
+        background: #ffffff;
+        padding: 3rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+    .empty-state h2 {
+        font-size: 1.5rem;
+        color: #2c3e50;
+    }
+    .empty-state p {
+        color: #7f8c8d;
+        margin-top: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Email Campaigns</h1>
+        <p>Create and manage your email campaigns</p>
+    </div>
+    <button id="create-campaign-btn" class="btn-primary">+ Create Campaign</button>
+</div>
+
+{% if not campaigns %}
+    <div class="empty-state">
+        <h2>No Campaigns Found</h2>
+        <p>You haven't created any email campaigns yet. Click the button above to get started!</p>
+    </div>
+{% else %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Campaign Name</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                    <th>Created By</th>
+                    <th>Created At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for campaign in campaigns %}
+                    <tr>
+                        <td>{{ campaign.name }}</td>
+                        <td>{{ campaign.subject }}</td>
+                        <td>{{ campaign.status }}</td>
+                        <td>{{ campaign.created_by }}</td>
+                        <td>{{ campaign.created_at.strftime('%Y-%m-%d %H:%M') if campaign.created_at else 'N/A' }}</td>
+                        <td>
+                            <a href="{{ url_for('campaign.preview_campaign', campaign_id=campaign.id) }}" class="action-link">Preview</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('create-campaign-btn').addEventListener('click', () => {
+        window.location.href = '{{ url_for('campaign.create_campaign_view') }}';
+    });
+</script>
+{% endblock %}

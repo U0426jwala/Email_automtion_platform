@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block title %}Create New Campaign - EmailFlow{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Styles for the create campaign page */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+    .page-header h1 {
+        font-size: 2rem;
+        font-weight: 500;
+        color: #2c3e50;
+    }
+    .page-header p {
+        color: #7f8c8d;
+    }
+    .btn {
+        border: none;
+        padding: 0.75rem 1.25rem;
+        border-radius: 5px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+    }
+    .btn-secondary {
+        background-color: #95a5a6;
+        color: white;
+    }
+    .btn-secondary:hover {
+        background-color: #7f8c8d;
+    }
+    .btn i {
+        margin-right: 0.5rem;
+    }
+    .form-container {
+        background: #fff;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid #e9ecef;
+    }
+    .form-container h2 {
+        font-size: 1.5rem;
+        font-weight: 500;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .form-group {
+        margin-bottom: 2rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.75rem;
+        font-weight: 500;
+        font-size: 1.1rem;
+    }
+    .form-group input[type="text"] {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        box-sizing: border-box;
+    }
+    .variable-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .variable-buttons .btn {
+        background-color: #eaf4ff;
+        color: #3498db;
+    }
+    .variable-buttons .btn:hover {
+        background-color: #d4e9ff;
+    }
+    .btn-ai {
+        background-color: #8e44ad;
+        color: white;
+    }
+    .btn-ai:hover {
+        background-color: #732d91;
+    }
+    .submit-btn {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.25rem;
+        background-color: #3498db;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    /* AI Loading Modal */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+    }
+    .modal-hidden {
+        display: none;
+    }
+    .modal-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top-color: #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Create New Email Campaign</h1>
+        <p>Craft the content for your automated emails here.</p>
+    </div>
+    <button onclick="window.history.back()" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i>Back to Campaigns
+    </button>
+</div>
+
+<div class="form-container">
+    <h2>Campaign Details</h2>
+    <form id="campaign-form" method="POST" action="{{ url_for('campaign.create_campaign_view') }}">
+        <div class="form-group">
+            <label for="name">Campaign Name:</label>
+            <input type="text" id="name" name="name" required placeholder="e.g., Q3 Product Update, Welcome Series Content">
+        </div>
+
+        <div class="form-group">
+            <label for="subject">Email Subject:</label>
+            <input type="text" id="subject" name="subject" required placeholder="e.g., An Exclusive Offer Just for {{ '{{First Name}}' }}">
+        </div>
+
+        <div class="form-group">
+            <label>Email Body:</label>
+            <div class="variable-buttons">
+                <button type="button" class="btn" onclick="insertVariable('{{ '{{First Name}}' }}')"><i class="fas fa-user"></i>First Name</button>
+                <button type="button" class="btn" onclick="insertVariable('{{ '{{Last Name}}' }}')"><i class="fas fa-user-tag"></i>Last Name</button>
+                <button type="button" class="btn" onclick="insertVariable('{{ '{{Email}}' }}')"><i class="fas fa-at"></i>Email</button>
+                <button type="button" class="btn" onclick="insertVariable('{{ '{{Company}}' }}')"><i class="fas fa-building"></i>Company</button>
+                <button type="button" id="improve-body-btn" class="btn btn-ai"><i class="fas fa-robot"></i>Improve Body (AI)</button>
+            </div>
+            <textarea name="body" id="editor"></textarea>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.5rem;">Tip: Use the buttons above to insert personalization variables.</p>
+        </div>
+        
+        <button type="submit" class="submit-btn">Create Campaign</button>
+    </form>
+</div>
+
+<div id="ai-loading-modal" class="modal-overlay modal-hidden">
+    <div class="modal-content">
+        <div class="loader"></div>
+        <p>Generating AI content...</p>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+<script>
+    const apiKey = "{{ gemini_api_key }}";
+    let editor;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        ClassicEditor
+            .create(document.querySelector('#editor'), {
+                placeholder: 'Start with "Dear {{ '{{First Name}}' }}," and add your message...',
+                toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote', '|', 'undo', 'redo']
+            })
+            .then(newEditor => { editor = newEditor; })
+            .catch(error => { console.error('CKEditor initialization error:', error); });
+
+        window.insertVariable = function(variable) {
+            if (editor) {
+                editor.model.insertContent(variable, editor.model.document.selection);
+            }
+        };
+
+        const improveBodyBtn = document.getElementById('improve-body-btn');
+        improveBodyBtn.addEventListener('click', async () => {
+            if (!editor || editor.getData().trim() === '') {
+                alert('Please write some content in the email body before using AI.');
+                return;
+            }
+            if (!apiKey) {
+                alert('Gemini API key is not configured.');
+                return;
+            }
+
+            const aiLoadingModal = document.getElementById('ai-loading-modal');
+            aiLoadingModal.classList.remove('modal-hidden');
+
+            const currentBodyText = editor.getData();
+
+            try {
+                const prompt = `Improve the following email body to be more engaging and persuasive. Retain the original meaning and any placeholders like {{ '{{First Name}}' }}. Provide only the improved body content as HTML.\n\nEmail Body:\n${currentBodyText}`;
+                const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                
+                const result = await response.json();
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                    editor.setData(result.candidates[0].content.parts[0].text.trim());
+                } else {
+                    throw new Error('Unexpected API response structure.');
+                }
+            } catch (error) {
+                alert('Error improving email body: ' + error.message);
+            } finally {
+                aiLoadingModal.classList.add('modal-hidden');
+            }
+        });
+    });
+</script>
+{% endblock %}

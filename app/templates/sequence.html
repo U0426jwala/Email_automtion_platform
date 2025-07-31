@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block title %}Email Sequences - EmailFlow{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* Styles for the sequences list page */
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .page-header h1 { font-size: 2rem; font-weight: 500; color: #2c3e50; }
+    .page-header p { color: #7f8c8d; }
+    .btn { display: inline-flex; align-items: center; text-decoration: none; border: none; padding: 0.75rem 1.25rem; border-radius: 5px; font-weight: 500; cursor: pointer; transition: background-color 0.3s; }
+    .btn-primary { background-color: #3498db; color: white; }
+    .btn-primary:hover { background-color: #2980b9; }
+    .btn i { margin-right: 0.5rem; }
+    .table-container { background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e9ecef; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 1rem; border-bottom: 1px solid #e9ecef; }
+    thead { background-color: #f8f9fa; }
+    th { font-weight: 500; color: #495057; font-size: 0.8rem; text-transform: uppercase; }
+    .status-badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: capitalize; }
+    .status-active { background-color: #d1fae5; color: #065f46; }
+    .status-completed { background-color: #dbeafe; color: #1e40af; }
+    .status-failed { background-color: #fee2e2; color: #991b1b; }
+    .status-default { background-color: #f3f4f6; color: #374151; }
+    .action-link { color: #3498db; text-decoration: none; font-weight: 500; }
+    .action-link:hover { text-decoration: underline; }
+    .delete-btn { background: none; border: none; color: #e74c3c; cursor: pointer; padding: 0; font-weight: 500; }
+    .delete-btn:hover { text-decoration: underline; }
+    .empty-state { background: #fff; padding: 3rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; }
+    .empty-state h2 { font-size: 1.5rem; color: #2c3e50; margin-bottom: 1rem; }
+    .empty-state p { color: #7f8c8d; margin-bottom: 1.5rem; }
+    .flash-message { padding: 1rem; margin-bottom: 1rem; border-radius: 5px; }
+    .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .flash-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Email Sequences</h1>
+        <p>Manage your automated email flows</p>
+    </div>
+    <a href="{{ url_for('sequence.create_sequence_route') }}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i>Create New Sequence
+    </a>
+</div>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div>
+            {% for message in messages %}
+                <div class="flash-message {% if 'success' in message|lower %}flash-success{% else %}flash-error{% endif %}">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
+
+{% if not sequences %}
+    <div class="empty-state">
+        <h2>No Sequences Yet</h2>
+        <p>You haven't created any email sequences yet.</p>
+        <a href="{{ url_for('sequence.create_sequence_route') }}" class="btn btn-primary">
+            <i class="fas fa-magic"></i>Create Your First Sequence
+        </a>
+    </div>
+{% else %}
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Sequence Name</th>
+                    <th>Contact List</th>
+                    <th>Status</th>
+                    <th>Total Steps</th>
+                    <th>Created By</th>
+                    <th>Created At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sequence in sequences %}
+                    <tr>
+                        <td style="font-weight: 500;">{{ sequence.name }}</td>
+                        <td>{{ sequence.list_name }}</td>
+                        <td>
+                            <span class="status-badge 
+                                {% if sequence.status == 'active' %}status-active
+                                {% elif sequence.status == 'completed' %}status-completed
+                                {% elif sequence.status == 'failed' %}status-failed
+                                {% else %}status-default{% endif %}">
+                                {{ sequence.status }}
+                            </span>
+                        </td>
+                        <td>{{ sequence.total_steps }}</td>
+                        <td>{{ sequence.created_by }}</td>
+                        <td>{{ sequence.created_at.strftime('%Y-%m-%d %H:%M') if sequence.created_at else 'N/A' }}</td>
+                        <td>
+                            <a href="{{ url_for('sequence.manage_sequence', sequence_id=sequence.id) }}" class="action-link" style="margin-right: 1rem;">
+                                <i class="fas fa-cog"></i>Manage Steps
+                            </a>
+                            <form action="{{ url_for('sequence.delete_sequence_route', sequence_id=sequence.id) }}" method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this sequence and all its steps? This action cannot be undone.');">
+                                <button type="submit" class="delete-btn">
+                                    <i class="fas fa-trash-alt"></i>Delete
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+{% endblock %}

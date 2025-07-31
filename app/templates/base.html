@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}EmailFlow{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+
+        .header {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 65px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header .logo {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        .header .logo:hover {
+            color: #3498db;
+        }
+
+        .header .main-nav ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .header .main-nav a {
+            display: block;
+            padding: 1.25rem 1rem;
+            text-decoration: none;
+            color: #555;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .header .main-nav a:hover {
+            color: #3498db;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .user-info a {
+            color: #e74c3c;
+            text-decoration: none;
+            margin-left: 1rem;
+            font-size: 1.2rem;
+        }
+         .user-info a:hover {
+            color: #c0392b;
+        }
+
+        .main-container {
+            padding: 2.5rem;
+        }
+        
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        }
+
+    </style>
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+
+    <header class="header">
+        <a href="{{ url_for('main.home') }}" class="logo">EmailFlow</a> {# Assumes home route is main.home #}
+        <nav class="main-nav">
+            <ul>
+                <li><a href="{{ url_for('ses.configure_ses') }}">SES Config</a></li>
+                <li><a href="{{ url_for('campaign.campaign_list') }}">Campaigns</a></li>
+                <li><a href="{{ url_for('contact.lists') }}">Contacts</a></li>
+                <li><a href="{{ url_for('sequence.list_sequences') }}">Sequences</a></li>
+                <li><a href="{{ url_for('scheduler.view_scheduled_emails') }}">Scheduled Emails</a></li>
+            </ul>
+        </nav>
+        <div class="user-info">
+              {% if current_user.is_authenticated %}
+                  <span>{{ current_user.email }}</span>
+                  <a href="{{ url_for('auth.logout') }}" title="Sign Out"><i class="fas fa-sign-out-alt"></i></a>
+              {% endif %}
+        </div>
+    </header>
+
+    <main class="main-container">
+        {% block content %}{% endblock %}
+    </main>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
