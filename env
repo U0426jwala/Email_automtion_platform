@@ -1,0 +1,20 @@
+# Flask Configuration
+FLASK_ENV=production
+SECRET_KEY= 1482e314a521c481d883e4078c9e9b23
+
+# AWS SES Credentials
+SES_ACCESS_KEY=AKIAXQIQAJ5BX5MG7TD7 # Replace with your AWS SES Access Key
+SES_SECRET_KEY=jwz/Wzm5PIwtNL5W4W3cIVeUGUnP4Ze8NsSbAgpK  # Replace with your AWS SES Secret Key
+SES_REGION=us-east-1  # Matches your .env AWS_REGION
+
+# AWS SES Sender Email
+AWS_SES_SENDER_EMAIL=alok.a@sminetechsol.com
+
+# MySQL Database Configuration
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=Ujwala@26
+DB_NAME=email_automation_db
+
+#Gemini API Key
+GEMINI_API_KEY =AIzaSyA8ZqXcGH1ZTuzpsaKSTW3lJ8Qb7nIII4o
