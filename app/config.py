@@ -2,11 +2,11 @@ import os
 
 class Config:
     # --- Secrets - MUST be set in environment ---
-    SECRET_KEY = os.getenv('SECRET_KEY')
-    MYSQL_PASSWORD = os.getenv('DB_PASSWORD')
-    SES_ACCESS_KEY = os.getenv('SES_ACCESS_KEY')
-    SES_SECRET_KEY = os.getenv('SES_SECRET_KEY')
-    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    SECRET_KEY = os.getenv('1482e314a521c481d883e4078c9e9b23')
+    MYSQL_PASSWORD = os.getenv('Ujwala@26')
+    SES_ACCESS_KEY = os.getenv('AKIAXQIQAJ5BX5MG7TD7')
+    SES_SECRET_KEY = os.getenv('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')
+    GEMINI_API_KEY = os.getenv('AIzaSyA8ZqXcGH1ZTuzpsaKSTW3lJ8Qb7nIII4o')
 
     # --- Non-Secrets - Defaults are OK for local development ---
     MYSQL_HOST = os.getenv('DB_HOST', 'localhost')
