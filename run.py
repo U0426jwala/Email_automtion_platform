@@ -1,12 +1,15 @@
 # run.py
 
-from app import create_app
+# --- Step 1: Load Environment Variables FIRST ---
+# This MUST be the first thing to run so that all subsequent imports
+# have access to the variables in the .env file.
 from dotenv import load_dotenv
+load_dotenv()
+
+# --- Step 2: Now, import the rest of your application ---
+from app import create_app
 import os
 import logging
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,8 +20,6 @@ try:
     from waitress import serve
 except ImportError:
     logger.error("Waitress is not installed. Please run 'pip install waitress'.")
-    # If Waitress is absolutely required for your development setup on Windows,
-    # you might want to exit here, or provide more specific instructions.
     serve = None # Set to None if not available to prevent NameError later
 
 
