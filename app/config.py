@@ -1,15 +1,26 @@
 import os
 
 class Config:
-    # --- Secrets - MUST be set in environment ---
-    SECRET_KEY = os.getenv('1482e314a521c481d883e4078c9e9b23')
-    MYSQL_PASSWORD = os.getenv('Ujwala@26')
-    SES_ACCESS_KEY = os.getenv('AKIAXQIQAJ5BX5MG7TD7')
-    SES_SECRET_KEY = os.getenv('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')
-    GEMINI_API_KEY = os.getenv('AIzaSyA8ZqXcGH1ZTuzpsaKSTW3lJ8Qb7nIII4o')
+    """
+    Application configuration class.
+    Loads secrets from environment variables.
+    Provides sensible defaults for development.
+    """
+    # --- Secrets - MUST be set in the .env file ---
+    # Fallback key is for local development convenience ONLY.
+    # A real SECRET_KEY MUST be set in the environment for production.
+    SECRET_KEY = os.getenv('SECRET_KEY') or 'a-temporary-and-insecure-development-key'
+    
+    # These will be None if not set in the environment, causing an error
+    # which is GOOD. It forces you to set them.
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
+    SES_ACCESS_KEY = os.getenv('SES_ACCESS_KEY')
+    SES_SECRET_KEY = os.getenv('SES_SECRET_KEY')
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-    # --- Non-Secrets - Defaults are OK for local development ---
-    MYSQL_HOST = os.getenv('DB_HOST', 'localhost')
-    MYSQL_USER = os.getenv('DB_USER', 'root')
-    MYSQL_DB = os.getenv('DB_NAME', 'email_automation_db')
+    # --- Database and Service Configs ---
+    # Defaults are provided for easy local development setup.
+    MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
+    MYSQL_USER = os.getenv('MYSQL_USER', 'root')
+    MYSQL_DB = os.getenv('MYSQL_DB', 'email_automation_db')
     SES_REGION = os.getenv('SES_REGION', 'us-east-1')
