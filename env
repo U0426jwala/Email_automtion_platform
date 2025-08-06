@@ -13,7 +13,7 @@ AWS_SES_SENDER_EMAIL=alok.a@sminetechsol.com
 # MySQL Database Configuration
 DB_HOST=localhost
 DB_USER=root
-DB_PASSWORD=Ujwala@26
+MYSQL_PASSWORD=Ujwala@26
 DB_NAME=email_automation_db
 
 #Gemini API Key
