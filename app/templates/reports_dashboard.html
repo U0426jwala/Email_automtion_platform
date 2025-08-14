@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Reports Dashboard{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div>
+            <h1>Reports Dashboard</h1>
+            <p style="margin: 0; color: #555;">
+                
+            </p>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-paper-plane"></i></div>
+            <div class="stat-value" id="total-sent">{{ stats.total_sent }}</div>
+            <div class="stat-label">Total Emails Sent</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-clock"></i></div>
+            <div class="stat-value" id="total-scheduled">{{ stats.total_scheduled }}</div>
+            <div class="stat-label">Emails Scheduled (Future)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-users"></i></div>
+            <div class="stat-value" id="total-contacts">{{ stats.total_contacts }}</div>
+            <div class="stat-label">Total Contacts</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-list-ul"></i></div>
+            <div class="stat-value" id="total-lists">{{ stats.total_lists }}</div>
+            <div class="stat-label">Total Number of Lists</div>
+        </div>
+    </div>
+    
+    <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); max-width: 900px; margin-top: 2rem;">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-calendar-day"></i></div>
+            <div class="stat-value" id="sent-last-24h">{{ stats.sent_last_24h }}</div>
+            <div class="stat-label">Emails Sent (Last 24 Hours)</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-calendar-alt"></i></div>
+            <div class="stat-value">{{ stats.sent_monthly }}</div>
+            <div class="stat-label">Total Emails Sent Monthly</div>
+            <form method="GET" action="{{ url_for('reports.reports_dashboard') }}" class="month-selector-form">
+                <select name="month" onchange="this.form.submit()">
+                    {% for num, name in months %}
+                        <option value="{{ num }}" {% if num == selected_month %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <select name="year" onchange="this.form.submit()">
+                     {% for year in years %}
+                        <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        
+        <div class="stat-card">
+             <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+            <div class="stat-value">{{ stats.scheduled_monthly }}</div>
+            <div class="stat-label">Total Emails Scheduled Monthly</div>
+             <form method="GET" action="{{ url_for('reports.reports_dashboard') }}" class="month-selector-form">
+                <select name="month" onchange="this.form.submit()">
+                    {% for num, name in months %}
+                        <option value="{{ num }}" {% if num == selected_month %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <select name="year" onchange="this.form.submit()">
+                     {% for year in years %}
+                        <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // This function will run every 30 seconds to update the stats
+    function fetchAndUpdateStats() {
+        fetch("{{ url_for('reports.reports_data') }}")
+            .then(response => response.json())
+            .then(data => {
+                // Update the text content of each stat card with the new data
+                document.getElementById('total-sent').textContent = data.total_sent;
+                document.getElementById('total-scheduled').textContent = data.total_scheduled;
+                document.getElementById('total-contacts').textContent = data.total_contacts;
+                document.getElementById('total-lists').textContent = data.total_lists;
+                document.getElementById('sent-last-24h').textContent = data.sent_last_24h;
+
+                const now = new Date();
+                document.getElementById('last-updated').textContent = now.toLocaleTimeString('en-GB', { hour12: false }) + ' UTC';
+
+                console.log('Dashboard stats updated automatically.');
+            })
+            .catch(error => console.error('Error fetching stats:', error));
+    }
+    setInterval(fetchAndUpdateStats, 30000);
+</script>
+{% endblock %}

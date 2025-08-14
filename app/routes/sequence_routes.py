@@ -1,188 +1,208 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
-from app.models.contact import get_lists
 from app.models.campaign import get_campaigns
+from app.models.contact import get_lists
+
+# All necessary model functions are correctly imported
 from app.models.sequence import (
-    create_sequence, get_sequences, get_sequence,
-    create_sequence_step, get_sequence_steps, get_sequence_step,
-    update_sequence_step, delete_sequence_step, delete_sequence
+    create_sequence, 
+    get_sequences, 
+    get_sequence,
+    create_sequence_step, 
+    get_sequence_steps, 
+    get_sequence_step,
+    update_sequence_step, 
+    delete_sequence_step, 
+    delete_sequence
 )
-import logging
 from datetime import datetime
+import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 sequence_bp = Blueprint('sequence', __name__, url_prefix='/sequences')
 
-@sequence_bp.route('/create_sequence', methods=['GET', 'POST'])
+@sequence_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_sequence_route():
+    """Handles the creation of a new sequence with one or more steps."""
     if request.method == 'POST':
         sequence_name = request.form.get('sequence_name')
-        list_id = request.form.get('list_id')
-        selected_campaign_id = request.form.get('campaign_id')
-        schedule_time_str = request.form.get('schedule_time')
-        is_re_reply = request.form.get('is_re_reply') == 'on'
+        step1_list_id = request.form.get('step[1][list_id]')
 
-        if not all([sequence_name, list_id, selected_campaign_id, schedule_time_str]):
-            flash('All fields (Sequence Name, List, Initial Campaign, Schedule Time) are required.', 'error')
+        if not sequence_name or not step1_list_id:
+            flash('Sequence Name and a Contact List for Step 1 are required.', 'error')
             return redirect(url_for('sequence.create_sequence_route'))
 
-        try:
-            schedule_time = datetime.fromisoformat(schedule_time_str)
-        except ValueError:
-            flash('Invalid schedule time format. Please use the provided date/time picker.', 'error')
-            return redirect(url_for('sequence.create_sequence_route'))
+        # Create the main sequence, correctly saving the integer user ID
+        sequence_id = create_sequence(sequence_name, step1_list_id, current_user.id, status='active')
 
-        sequence_id = create_sequence(sequence_name, list_id, current_user.username, status='active')
-        
-        if sequence_id:
-            create_sequence_step(sequence_id, 1, selected_campaign_id, 0, is_re_reply)
-            
-            flash(f"Sequence '{sequence_name}' created! You can now add more steps.", 'success')
-            return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
-        else:
+        if not sequence_id:
             flash('Failed to create sequence.', 'error')
             return redirect(url_for('sequence.create_sequence_route'))
 
-    # --- GET Request Logic ---
+        # Process all steps submitted with the form
+        step_keys = [key for key in request.form if key.startswith('step[')]
+        
+        max_step = 0
+        if step_keys:
+            max_step = max([int(key.split('[')[1].split(']')[0]) for key in step_keys])
+
+        steps_created = 0
+        for i in range(1, max_step + 1):
+            campaign_id = request.form.get(f'step[{i}][campaign_id]')
+            schedule_time_str = request.form.get(f'step[{i}][schedule_time]')
+
+            if campaign_id and schedule_time_str:
+                try:
+                    schedule_time = datetime.fromisoformat(schedule_time_str)
+                    is_re_reply = (i > 1)
+
+                    create_sequence_step(
+                        sequence_id=sequence_id,
+                        step_number=i,
+                        type='mailer',
+                        campaign_id=int(campaign_id),
+                        schedule_time=schedule_time,
+                        is_re_reply=is_re_reply,
+                        status='scheduled'
+                    )
+                    steps_created += 1
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error processing form data for step {i}: {e}", exc_info=True)
+                    flash(f'Invalid data for step {i}. It was skipped.', 'warning')
+                    continue
+        
+        if steps_created == 0:
+            flash('No valid steps were provided. The sequence was created but has no steps.', 'error')
+            return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
+
+        flash(f"Sequence '{sequence_name}' created with {steps_created} scheduled step(s)!", 'success')
+        return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
+
+    # For GET requests, display the form
     lists = get_lists()
     campaigns = get_campaigns()
-    
-    # CORRECTED: Create the data structure needed for the JavaScript preview
-    campaigns_data = [
-        {'id': c.get('id'), 'name': c.get('name'), 'subject': c.get('subject'), 'body': c.get('body')}
-        for c in campaigns
-    ]
+    return render_template('create_sequence.html', lists=lists, campaigns=campaigns)
 
-    # CORRECTED: Pass the new data to the template
-    return render_template(
-        'create_sequence.html', 
-        lists=lists, 
-        campaigns=campaigns,
-        campaigns_data=campaigns_data
-    )
 
-@sequence_bp.route('/list', methods=['GET'])
+@sequence_bp.route('/list')
 @login_required
 def list_sequences():
+    """Displays all created sequences."""
     sequences = get_sequences()
     return render_template('sequence.html', sequences=sequences)
+
 
 @sequence_bp.route('/manage/<int:sequence_id>', methods=['GET'])
 @login_required
 def manage_sequence(sequence_id):
+    """Displays the details and steps of a single sequence."""
     sequence = get_sequence(sequence_id)
     if not sequence:
         flash('Sequence not found.', 'error')
         return redirect(url_for('sequence.list_sequences'))
 
     steps = get_sequence_steps(sequence_id)
-    campaigns = get_campaigns()
-    campaign_map = {c['id']: c['name'] for c in campaigns}
-
-    return render_template('manage_sequence.html',
-                           sequence=sequence,
-                           steps=steps,
-                           campaigns=campaigns,
-                           campaign_map=campaign_map)
+    return render_template('manage_sequence.html', sequence=sequence, steps=steps)
 
 @sequence_bp.route('/add_step/<int:sequence_id>', methods=['GET', 'POST'])
 @login_required
 def add_sequence_step_route(sequence_id):
+    """Handles adding a new step to an existing sequence."""
     sequence = get_sequence(sequence_id)
     if not sequence:
         flash('Sequence not found.', 'error')
         return redirect(url_for('sequence.list_sequences'))
 
-    campaigns = get_campaigns()
-
     if request.method == 'POST':
         campaign_id = request.form.get('campaign_id')
-        day = request.form.get('day')
-        schedule_offset_minutes = request.form.get('schedule_offset_minutes', 0)
-        is_re_reply = request.form.get('is_re_reply') == 'on'
-
-        if not all([campaign_id, day]):
-            flash('Campaign and Day fields are required.', 'error')
-            return render_template('add_sequence_step.html', sequence=sequence, campaigns=campaigns)
+        schedule_time_str = request.form.get('schedule_time')
+        
+        if not all([campaign_id, schedule_time_str]):
+            flash('Campaign and Schedule Time are required.', 'error')
+            return redirect(url_for('sequence.add_sequence_step_route', sequence_id=sequence_id))
 
         try:
-            day = int(day)
-            schedule_offset_minutes = int(schedule_offset_minutes)
+            schedule_time = datetime.fromisoformat(schedule_time_str)
             campaign_id = int(campaign_id)
-        except (ValueError, TypeError):
-            flash('Day and Schedule Offset must be valid numbers.', 'error')
-            return render_template('add_sequence_step.html', sequence=sequence, campaigns=campaigns)
+        except ValueError:
+            flash('Invalid input format.', 'error')
+            return redirect(url_for('sequence.add_sequence_step_route', sequence_id=sequence_id))
 
-        step_id = create_sequence_step(sequence_id, day, campaign_id, schedule_offset_minutes, is_re_reply)
-        if step_id:
-            flash('Sequence step added successfully!', 'success')
+        steps = get_sequence_steps(sequence_id)
+        next_step_number = len(steps) + 1
+        is_re_reply = next_step_number > 1
+
+        if create_sequence_step(sequence_id, next_step_number, 'mailer', campaign_id, schedule_time, is_re_reply, status='scheduled'):
+            flash('New step added successfully!', 'success')
             return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
         else:
-            flash('Failed to add sequence step. A step for that day might already exist.', 'error')
-            return render_template('add_sequence_step.html', sequence=sequence, campaigns=campaigns)
+            flash('Failed to add the new step.', 'error')
 
+    # For GET requests, display the add step form
+    campaigns = get_campaigns()
     return render_template('add_sequence_step.html', sequence=sequence, campaigns=campaigns)
 
 @sequence_bp.route('/edit_step/<int:step_id>', methods=['GET', 'POST'])
 @login_required
 def edit_sequence_step_route(step_id):
+    """Handles editing an existing sequence step."""
     step = get_sequence_step(step_id)
     if not step:
-        flash('Sequence step not found.', 'error')
+        flash('Step not found.', 'error')
         return redirect(url_for('sequence.list_sequences'))
-
-    sequence = get_sequence(step['sequence_id'])
-    campaigns = get_campaigns()
 
     if request.method == 'POST':
         campaign_id = request.form.get('campaign_id')
-        day = request.form.get('day')
-        schedule_offset_minutes = request.form.get('schedule_offset_minutes', 0)
-        is_re_reply = request.form.get('is_re_reply') == 'on'
+        schedule_time_str = request.form.get('schedule_time')
 
-        if not all([campaign_id, day]):
-            flash('All step fields are required.', 'error')
-            return render_template('edit_sequence_step.html', step=step, sequence=sequence, campaigns=campaigns)
+        if not all([campaign_id, schedule_time_str]):
+            flash('All fields are required.', 'error')
+            return redirect(url_for('sequence.edit_sequence_step_route', step_id=step_id))
 
         try:
-            day = int(day)
-            schedule_offset_minutes = int(schedule_offset_minutes)
+            schedule_time = datetime.fromisoformat(schedule_time_str)
             campaign_id = int(campaign_id)
-        except (ValueError, TypeError):
-            flash('Day and Schedule Offset must be valid numbers.', 'error')
-            return render_template('edit_sequence_step.html', step=step, sequence=sequence, campaigns=campaigns)
+        except ValueError:
+            flash('Invalid input format.', 'error')
+            return redirect(url_for('sequence.edit_sequence_step_route', step_id=step_id))
 
-        if update_sequence_step(step_id, day, campaign_id, schedule_offset_minutes, is_re_reply):
-            flash('Sequence step updated successfully!', 'success')
+        is_re_reply = step['step_number'] > 1
+
+        if update_sequence_step(step_id, step['step_number'], 'mailer', campaign_id, schedule_time, is_re_reply):
+            flash('Step updated successfully!', 'success')
             return redirect(url_for('sequence.manage_sequence', sequence_id=step['sequence_id']))
         else:
-            flash('Failed to update sequence step.', 'error')
-
-    return render_template('edit_sequence_step.html', step=step, sequence=sequence, campaigns=campaigns)
+            flash('Failed to update step.', 'error')
+            
+    # For GET requests, display the edit step form
+    campaigns = get_campaigns()
+    return render_template('edit_sequence_step.html', step=step, campaigns=campaigns)
 
 @sequence_bp.route('/delete_step/<int:step_id>', methods=['POST'])
 @login_required
 def delete_step_route(step_id):
+    """Handles deleting a single step."""
     step = get_sequence_step(step_id)
     if not step:
-        flash('Sequence step not found.', 'error')
+        flash('Step not found.', 'error')
         return redirect(url_for('sequence.list_sequences'))
 
     sequence_id = step['sequence_id']
     if delete_sequence_step(step_id):
-        flash('Sequence step deleted successfully!', 'success')
+        flash('Step deleted successfully.', 'success')
     else:
-        flash('Failed to delete sequence step.', 'error')
+        flash('Failed to delete step.', 'error')
     return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
 
 @sequence_bp.route('/delete_sequence/<int:sequence_id>', methods=['POST'])
 @login_required
 def delete_sequence_route(sequence_id):
+    """Handles deleting an entire sequence."""
     if delete_sequence(sequence_id):
-        flash('Sequence deleted successfully!', 'success')
+        flash('Sequence and all its steps have been deleted.', 'success')
     else:
         flash('Failed to delete sequence.', 'error')
     return redirect(url_for('sequence.list_sequences'))

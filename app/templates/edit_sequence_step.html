@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Sequence Step{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: auto;">
+    <div class="card">
+        <h1 style="text-align: center;">Edit Step {{ step.step_number }}</h1>
+        <p style="text-align: center; color: #555;">Update the details for this step in your sequence.</p>
+        <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 1.5rem 0;">
+
+        <form method="POST">
+            <div>
+                <label for="campaign_id">Mailer Campaign</label>
+                <select id="campaign_id" name="campaign_id" required>
+                    <option value="">-- Select a Campaign --</option>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}" {% if campaign.id == step.campaign_id %}selected{% endif %}>
+                            {{ campaign.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="schedule_time">Schedule Date & Time</label>
+                <input type="datetime-local" id="schedule_time" name="schedule_time" 
+                       value="{{ step.schedule_time.strftime('%Y-%m-%dT%H:%M') if step.schedule_time else '' }}" required>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
+                <a href="{{ url_for('sequence.manage_sequence', sequence_id=step.sequence_id) }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary" style="padding: 0.8rem 2.5rem;">Update Step</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

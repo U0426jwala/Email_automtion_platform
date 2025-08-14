@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
-from app.models.contact import create_list, save_contact, get_lists, get_contacts_by_list, update_list_records_count
+# CORRECTED: The import name is now 'get_contacts_for_list'
+from app.models.contact import create_list, save_contact, get_lists, get_contacts_for_list, update_list_records_count
 from app.utils.csv_processor import process_csv
 import logging
 
@@ -92,5 +93,6 @@ def add_contact(list_id):
 @contact_bp.route('/view_contacts/<int:list_id>', methods=['GET'])
 @login_required
 def view_contacts(list_id):
-    contacts = get_contacts_by_list(list_id)
+    # CORRECTED: The function call now uses the correct name
+    contacts = get_contacts_for_list(list_id)
     return render_template('view_contacts.html', contacts=contacts, list_id=list_id)

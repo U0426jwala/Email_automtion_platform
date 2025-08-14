@@ -7,10 +7,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #95a5a6;
+            --success-color: #2ecc71;
+            --danger-color: #e74c3c;
+            --warning-color: #f1c40f;
+            --light-color: #ecf0f1;
+            --dark-color: #2c3e50;
+            --border-radius: 6px;
+        }
+
         body {
             font-family: 'Roboto', sans-serif;
             margin: 0;
-            background-color: #f8f9fa;
+            background-color: var(--light-color);
             color: #333;
         }
 
@@ -30,11 +41,11 @@
         .header .logo {
             font-size: 1.6rem;
             font-weight: 700;
-            color: #2c3e50;
+            color: var(--dark-color);
             text-decoration: none;
         }
         .header .logo:hover {
-            color: #3498db;
+            color: var(--primary-color);
         }
 
         .header .main-nav ul {
@@ -55,7 +66,7 @@
         }
 
         .header .main-nav a:hover {
-            color: #3498db;
+            color: var(--primary-color);
         }
 
         .user-info {
@@ -66,7 +77,7 @@
         }
 
         .user-info a {
-            color: #e74c3c;
+            color: var(--danger-color);
             text-decoration: none;
             margin-left: 1rem;
             font-size: 1.2rem;
@@ -77,20 +88,143 @@
 
         .main-container {
             padding: 2.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 1rem;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            color: var(--dark-color);
         }
         
         .card {
             background: #ffffff;
-            border-radius: 8px;
+            border-radius: var(--border-radius);
             padding: 2rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            text-align: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
         }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        .btn {
+            display: inline-block;
+            font-weight: 500;
+            text-align: center;
+            vertical-align: middle;
+            cursor: pointer;
+            border: 1px solid transparent;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.9rem;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-primary { color: #fff; background-color: var(--primary-color); }
+        .btn-danger { color: #fff; background-color: var(--danger-color); }
+        .btn-secondary { color: #fff; background-color: var(--secondary-color); }
+        .btn-light { color: var(--dark-color); background-color: #bdc3c7; }
+        .btn:hover { opacity: 0.85; }
+
+        form div { margin-bottom: 1rem; }
+        form label { display: block; margin-bottom: 0.5rem; font-weight: 500; text-align: left;}
+        form input, form select {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1rem;
+            border: 1px solid #bdc3c7;
+            border-radius: var(--border-radius);
+            box-sizing: border-box;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: .3em .7em;
+            font-size: .75em;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 10rem;
+            color: #fff;
+            text-transform: uppercase;
+        }
+        .status-scheduled { background-color: var(--primary-color); }
+        .status-active { background-color: var(--success-color); }
+        .status-draft { background-color: var(--secondary-color); }
+        .status-finished { background-color: #16a085; }
+        .status-pending { background-color: var(--warning-color); color: var(--dark-color);}
+        .status-failed { background-color: var(--danger-color); }
+
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: var(--border-radius);
+            text-align: center;
+            font-weight: 500;
+        }
+        .flash-success { background-color: #d4edda; color: #155724; }
+        .flash-error { background-color: #f8d7da; color: #721c24; }
+
+        .step-card {
+            border: 1px solid #ddd;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            margin-top: 1.5rem;
+            background-color: #fdfdfd;
+        }
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* --- NEW STYLES FOR REPORTS DASHBOARD --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.5rem;
+        }
+        .stat-card {
+            background: #ffffff;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+        .stat-icon {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--dark-color);
+        }
+        .stat-label {
+            font-size: 1rem;
+            color: #555;
+            font-weight: 500;
+        }
+        .stat-card-placeholder {
+            opacity: 0.6;
+            background: #f8f9fa;
         }
 
     </style>
@@ -99,14 +233,14 @@
 <body>
 
     <header class="header">
-        <a href="{{ url_for('main.home') }}" class="logo">EmailFlow</a> {# Assumes home route is main.home #}
+        <a href="{{ url_for('main.home') }}" class="logo">EmailFlow</a>
         <nav class="main-nav">
             <ul>
                 <li><a href="{{ url_for('ses.configure_ses') }}">SES Config</a></li>
-                <li><a href="{{ url_for('campaign.campaign_list') }}">Campaigns</a></li>
+                <li><a href="{{ url_for('campaign.campaign_list') }}">Mailers</a></li>
                 <li><a href="{{ url_for('contact.lists') }}">Contacts</a></li>
                 <li><a href="{{ url_for('sequence.list_sequences') }}">Sequences</a></li>
-                <li><a href="{{ url_for('scheduler.view_scheduled_emails') }}">Scheduled Emails</a></li>
+                <li><a href="{{ url_for('reports.reports_dashboard') }}">Reports</a></li>
             </ul>
         </nav>
         <div class="user-info">

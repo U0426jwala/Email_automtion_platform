@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Step to {{ sequence.name }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: auto;">
+    <div class="card">
+        <h1 style="text-align: center;">Add New Step</h1>
+        <p style="text-align: center; color: #555;">To sequence: <strong>{{ sequence.name }}</strong></p>
+        <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 1.5rem 0;">
+
+        <form method="POST">
+            <div>
+                <label for="campaign_id">Mailer Campaign</label>
+                <select id="campaign_id" name="campaign_id" required>
+                    <option value="">-- Select a Campaign --</option>
+                    {% for campaign in campaigns %}
+                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="schedule_time">Schedule Date & Time</label>
+                <input type="datetime-local" id="schedule_time" name="schedule_time" required>
+            </div>
+             <input type="hidden" name="type" value="mailer">
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
+                <a href="{{ url_for('sequence.manage_sequence', sequence_id=sequence.id) }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary" style="padding: 0.8rem 2.5rem;">Add Step</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

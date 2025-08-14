@@ -1,240 +1,97 @@
-{% extends 'base.html' %}
+{% extends 'base.html' %} {# Assumes you have a base.html file #}
 
-{% block title %}Create New Email Sequence - EmailFlow{% endblock %}
-
-{% block head_extra %}
-<style>
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-    .page-header h1 { font-size: 2rem; font-weight: 500; color: #2c3e50; }
-    .page-header p { color: #7f8c8d; }
-    .btn { display: inline-flex; align-items: center; text-decoration: none; border: none; padding: 0.75rem 1.25rem; border-radius: 5px; font-weight: 500; cursor: pointer; transition: background-color 0.3s; }
-    .btn-secondary { background-color: #95a5a6; color: white; }
-    .btn-secondary:hover { background-color: #7f8c8d; }
-    .btn-purple { background-color: #8e44ad; color: white; }
-    .btn-purple:hover { background-color: #732d91; }
-    .btn i { margin-right: 0.5rem; }
-    .form-container { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e9ecef; }
-    .form-container h2 { font-size: 1.5rem; font-weight: 500; margin-bottom: 1.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 1rem; }
-    .form-group { margin-bottom: 2rem; }
-    .form-group label { display: block; margin-bottom: 0.75rem; font-weight: 500; font-size: 1.1rem; }
-    .form-group input[type="text"], .form-group input[type="datetime-local"], .form-group select { width: 100%; padding: 0.75rem; border: 1px solid #ced4da; border-radius: 5px; box-sizing: border-box; font-size: 1rem; }
-    .email-preview { display: none; background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 1rem;}
-    .email-preview h3 { font-size: 1.25rem; margin-bottom: 1rem; }
-    #preview-body { background: #fff; border: 1px solid #ced4da; border-radius: 5px; padding: 1rem; height: 240px; overflow-y: auto; }
-    .toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; }
-    .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
-    .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
-    input:checked + .slider { background-color: #2196F3; }
-    input:checked + .slider:before { transform: translateX(26px); }
-    .submit-btn { width: 100%; padding: 1rem; font-size: 1.25rem; background-color: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    .modal-overlay { position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
-    .modal-hidden { display: none; }
-    .modal-content { background: white; padding: 2rem; border-radius: 8px; max-width: 500px; width: 100%; }
-    .drop-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: 2.5rem; text-align: center; cursor: pointer; }
-    .flash-message { padding: 1rem; margin-bottom: 1rem; border-radius: 5px; }
-    .flash-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .flash-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-</style>
-{% endblock %}
-
+{% block title %}Create New Sequence{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Create New Email Sequence</h1>
-        <p>Design automated email flows with advanced options</p>
-    </div>
-    <a href="{{ url_for('sequence.list_sequences') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i>Back to Sequences</a>
-</div>
-
-<div class="form-container">
-    <h2>Sequence Details</h2>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div>
-                {% for category, message in messages %}
-                    <div class="flash-message {% if category == 'success' %}flash-success{% else %}flash-error{% endif %}">{{ message }}</div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-
-    <form id="advanced-sequence-form" method="POST" action="{{ url_for('sequence.create_sequence_route') }}">
+<div class="container">
+    <h1>Create New Email Sequence</h1>
+    <form method="POST">
         <div class="form-group">
-            <label for="sequence_name">Sequence Name:</label>
-            <input type="text" id="sequence_name" name="sequence_name" required placeholder="e.g., Welcome Series, Onboarding Flow">
+            <label for="sequence_name">Sequence Name</label>
+            <input type="text" class="form-control" id="sequence_name" name="sequence_name" required>
         </div>
-        <div class="form-group">
-            <label>Recipients & Content:</label>
-            <div style="margin-bottom: 1rem;">
-                <label for="list_id" style="font-size: 1rem; font-weight: normal; margin-bottom: 0.5rem;">1. Choose or Upload a Contact List:</label>
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <select id="list_id" name="list_id" required style="flex-grow: 1;">
-                        <option value="">-- Select a List --</option>
+        <hr>
+        
+        <div id="steps-container">
+            <div class="step-card" id="step-1">
+                <h4>Step 1</h4>
+                <div class="form-group">
+                    <label>Contact List (for entire sequence)</label>
+                    <select name="step[1][list_id]" class="form-control" required>
+                        <option value="">-- Select List --</option>
                         {% for list in lists %}
-                            <option value="{{ list.id }}">{{ list.list_name }} ({{ list.total_records }} contacts)</option>
+                        <option value="{{ list.id }}">{{ list.list_name }}</option>
                         {% endfor %}
                     </select>
-                    <button type="button" id="open-bulk-upload-modal-btn" class="btn btn-purple"><i class="fas fa-upload"></i>Bulk Upload</button>
                 </div>
-            </div>
-            <div>
-                <label for="campaign_id" style="font-size: 1rem; font-weight: normal; margin-bottom: 0.5rem;">2. Select Initial Campaign (Email Content):</label>
-                <select id="campaign_id" name="campaign_id" required>
-                    <option value="">-- Select a Campaign --</option>
-                    {% for campaign in campaigns %}
+                <div class="form-group">
+                    <label>Campaign</label>
+                    <select name="step[1][campaign_id]" class="form-control" required>
+                        <option value="">-- Select Campaign --</option>
+                        {% for campaign in campaigns %}
                         <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <div id="email-preview" class="email-preview">
-            <h3>Initial Email Preview</h3>
-            <div>
-                <label style="font-weight: 500; margin-bottom: 0.5rem; display: block;">Subject:</label>
-                <p id="preview-subject" style="background: #fff; border: 1px solid #ced4da; padding: 0.75rem; border-radius: 5px;"></p>
-            </div>
-            <div style="margin-top: 1rem;">
-                <label style="font-weight: 500; margin-bottom: 0.5rem; display: block;">Body:</label>
-                <div id="preview-body"></div>
-            </div>
-        </div>
-
-        <div class="form-group" style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px;">
-             <label class="toggle-switch">
-                <input type="checkbox" id="schedule_email_toggle" name="schedule_email_toggle" checked>
-                <span class="slider"></span>
-            </label>
-            <span style="margin-left: 0.75rem; font-weight: 500; font-size: 1.1rem; vertical-align: middle;">Schedule Sequence</span>
-            <div id="schedule-options" style="margin-top: 1rem;">
-                <label for="schedule_time">Start Time (Your Local Time):</label>
-                <input type="datetime-local" id="schedule_time" name="schedule_time" required>
-                <div style="margin-top: 1rem; display: flex; align-items: center;">
-                    <input type="checkbox" id="is_re_reply" name="is_re_reply" style="height: 1.25rem; width: 1.25rem; margin-right: 0.75rem;">
-                    <label for="is_re_reply">Mark first email as a "RE:" reply</label>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Schedule Date & Time</label>
+                    <input type="datetime-local" name="step[1][schedule_time]" class="form-control" required>
                 </div>
             </div>
         </div>
-        
-        <button type="submit" class="submit-btn"><i class="fas fa-paper-plane"></i>Create & Schedule Sequence</button>
+
+        <button type="button" class="btn btn-secondary mt-3" onclick="addStep()">+ Add Step</button>
+        <hr>
+        <button type="submit" class="btn btn-primary">Create Sequence</button>
     </form>
-</div>
-
-<div id="bulk-upload-modal" class="modal-overlay modal-hidden">
-    <div class="modal-content">
-        <h2>Create New List & Upload Contacts</h2>
-        <form id="bulk-upload-form">
-            <div class="form-group">
-                <label for="new_list_name">New List Name:</label>
-                <input type="text" id="new_list_name" name="new_list_name" required>
-            </div>
-            <div class="form-group">
-                <label>Upload CSV File:</label>
-                <div id="modal-drop-zone" class="drop-zone">
-                    <input type="file" id="modal-file-input" style="display:none;" accept=".csv" required>
-                    <div id="modal-drop-text"><i class="fas fa-cloud-upload-alt fa-3x" style="color: #bdc3c7;"></i><p>Drop file or click</p></div>
-                </div>
-            </div>
-            <div id="modal-feedback"></div>
-        </form>
-        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
-            <button type="button" id="close-bulk-upload-modal-btn" class="btn btn-secondary">Close</button>
-            <button type="button" id="submit-bulk-upload-btn" class="btn btn-purple">Create & Upload</button>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    const campaignsData = {{ campaigns_data|tojson|safe }};
-    document.addEventListener('DOMContentLoaded', () => {
-        const campaignSelect = document.getElementById('campaign_id');
-        const emailPreview = document.getElementById('email-preview');
-        const previewSubject = document.getElementById('preview-subject');
-        const previewBody = document.getElementById('preview-body');
-        const scheduleToggle = document.getElementById('schedule_email_toggle');
-        const scheduleOptions = document.getElementById('schedule-options');
-        const scheduleTimeInput = document.getElementById('schedule_time');
-        
-        campaignSelect.addEventListener('change', () => {
-            const campaignId = campaignSelect.value;
-            const campaign = campaignsData.find(c => c.id == campaignId);
-            if (campaign) {
-                emailPreview.style.display = 'block';
-                previewSubject.textContent = campaign.subject;
-                previewBody.innerHTML = campaign.body;
-            } else {
-                emailPreview.style.display = 'none';
-            }
-        });
+    let stepCounter = 1;
 
-        scheduleToggle.addEventListener('change', (e) => {
-            scheduleOptions.style.display = e.target.checked ? 'block' : 'none';
-            scheduleTimeInput.required = e.target.checked;
-        });
-        scheduleToggle.dispatchEvent(new Event('change'));
+    function addStep() {
+        stepCounter++;
+        const container = document.getElementById('steps-container');
+        const newStep = document.createElement('div');
+        newStep.className = 'step-card mt-3';
+        newStep.id = `step-${stepCounter}`;
 
-        const now = new Date();
-        now.setMinutes(now.getMinutes() + 5 - now.getTimezoneOffset());
-        scheduleTimeInput.value = now.toISOString().slice(0,16);
+        // Create options for campaign dropdown dynamically
+        const campaignOptions = `
+            <option value="">-- Select Campaign --</option>
+            {% for campaign in campaigns %}
+            <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+            {% endfor %}
+        `;
 
-        // Modal Logic
-        const modal = document.getElementById('bulk-upload-modal');
-        const openBtn = document.getElementById('open-bulk-upload-modal-btn');
-        const closeBtn = document.getElementById('close-bulk-upload-modal-btn');
-        const submitBtn = document.getElementById('submit-bulk-upload-btn');
-        const dropZone = document.getElementById('modal-drop-zone');
-        const fileInput = document.getElementById('modal-file-input');
-        const listNameInput = document.getElementById('new_list_name');
-        const feedbackEl = document.getElementById('modal-feedback');
-        const mainListSelect = document.getElementById('list_id');
+        newStep.innerHTML = `
+            <h4>Step ${stepCounter}</h4>
+            <div class="form-group">
+                <label>Campaign</label>
+                <select name="step[${stepCounter}][campaign_id]" class="form-control" required>
+                    ${campaignOptions}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Schedule Date & Time</label>
+                <input type="datetime-local" name="step[${stepCounter}][schedule_time]" class="form-control" required>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" name="step[${stepCounter}][is_re_reply]" id="reply-${stepCounter}">
+                <label class="form-check-label" for="reply-${stepCounter}">Reply to Previous Email (creates a thread)</label>
+            </div>
+            <button type="button" class="btn btn-danger btn-sm mt-2" onclick="removeStep(${stepCounter})">Remove Step</button>
+        `;
+        container.appendChild(newStep);
+    }
 
-        const resetModal = () => {
-            modal.classList.add('modal-hidden');
-            fileInput.value = '';
-            listNameInput.value = '';
-            feedbackEl.textContent = '';
-        };
-
-        openBtn.addEventListener('click', () => modal.classList.remove('modal-hidden'));
-        closeBtn.addEventListener('click', resetModal);
-        dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) document.getElementById('modal-drop-text').textContent = `File: ${fileInput.files[0].name}`;
-        });
-
-        submitBtn.addEventListener('click', async () => {
-            if (!listNameInput.value || !fileInput.files.length) {
-                feedbackEl.textContent = 'List name and file are required.';
-                feedbackEl.style.color = 'red';
-                return;
-            }
-            feedbackEl.textContent = 'Uploading...';
-            feedbackEl.style.color = 'blue';
-
-            const formData = new FormData();
-            formData.append('list_name', listNameInput.value);
-            formData.append('file', fileInput.files[0]);
-
-            try {
-                const response = await fetch("{{ url_for('contact.create_and_upload_list') }}", { method: 'POST', body: formData });
-                const result = await response.json();
-                feedbackEl.textContent = result.message;
-                feedbackEl.style.color = result.status === 'success' ? 'green' : 'red';
-                if (result.status === 'success') {
-                    const newList = result.list;
-                    const newOption = new Option(`${newList.list_name} (${newList.total_records} contacts)`, newList.id, false, true);
-                    mainListSelect.add(newOption);
-                    setTimeout(resetModal, 2000);
-                }
-            } catch (error) {
-                feedbackEl.textContent = 'An error occurred.';
-                feedbackEl.style.color = 'red';
-            }
-        });
-    });
+    function removeStep(stepId) {
+        const stepToRemove = document.getElementById(`step-${stepId}`);
+        if (stepToRemove) {
+            stepToRemove.remove();
+        }
+    }
 </script>
 {% endblock %}

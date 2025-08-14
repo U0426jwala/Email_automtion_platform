@@ -164,10 +164,10 @@
         <div class="form-group">
             <label>Email Body:</label>
             <div class="variable-buttons">
-                <button type="button" class="btn" onclick="insertVariable('{{ '{{First Name}}' }}')"><i class="fas fa-user"></i>First Name</button>
-                <button type="button" class="btn" onclick="insertVariable('{{ '{{Last Name}}' }}')"><i class="fas fa-user-tag"></i>Last Name</button>
-                <button type="button" class="btn" onclick="insertVariable('{{ '{{Email}}' }}')"><i class="fas fa-at"></i>Email</button>
-                <button type="button" class="btn" onclick="insertVariable('{{ '{{Company}}' }}')"><i class="fas fa-building"></i>Company</button>
+                <button type="button" class="btn variable-btn" data-name="First Name"><i class="fas fa-user"></i>First Name</button>
+                <button type="button" class="btn variable-btn" data-name="Last Name"><i class="fas fa-user-tag"></i>Last Name</button>
+                <button type="button" class="btn variable-btn" data-name="Email"><i class="fas fa-at"></i>Email</button>
+                <button type="button" class="btn variable-btn" data-name="Company"><i class="fas fa-building"></i>Company</button>
                 <button type="button" id="improve-body-btn" class="btn btn-ai"><i class="fas fa-robot"></i>Improve Body (AI)</button>
             </div>
             <textarea name="body" id="editor"></textarea>
@@ -190,24 +190,44 @@
 {% block scripts %}
 <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 <script>
+    // This line is processed by Jinja2 to insert the API key.
     const apiKey = "{{ gemini_api_key }}";
+
+    // Start the raw block here to prevent Jinja2 from parsing the JavaScript below.
+    {% raw %}
     let editor;
 
     document.addEventListener('DOMContentLoaded', () => {
         ClassicEditor
             .create(document.querySelector('#editor'), {
-                placeholder: 'Start with "Dear {{ '{{First Name}}' }}," and add your message...',
+                placeholder: 'Start with "Dear {{First Name}}," and add your message...',
                 toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', 'blockQuote', '|', 'undo', 'redo']
             })
-            .then(newEditor => { editor = newEditor; })
-            .catch(error => { console.error('CKEditor initialization error:', error); });
+            .then(newEditor => {
+                editor = newEditor;
+                const variableButtons = document.querySelectorAll('.variable-btn');
+                variableButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const variableName = button.dataset.name;
+                        if (editor && variableName) {
+                            const fullPlaceholder = `{{${variableName}}}`;
+                            
+                            // Using the robust 'change' block which is now proven to work.
+                            editor.model.change(writer => {
+                                const insertPosition = editor.model.document.selection.getFirstPosition();
+                                writer.insertText(fullPlaceholder, insertPosition);
+                            });
+                            
+                            editor.editing.view.focus();
+                        }
+                    });
+                });
+            })
+            .catch(error => { 
+                console.error("CKEditor failed to initialize.", error); 
+            });
 
-        window.insertVariable = function(variable) {
-            if (editor) {
-                editor.model.insertContent(variable, editor.model.document.selection);
-            }
-        };
-
+        // The AI button logic remains the same.
         const improveBodyBtn = document.getElementById('improve-body-btn');
         improveBodyBtn.addEventListener('click', async () => {
             if (!editor || editor.getData().trim() === '') {
@@ -218,25 +238,19 @@
                 alert('Gemini API key is not configured.');
                 return;
             }
-
             const aiLoadingModal = document.getElementById('ai-loading-modal');
             aiLoadingModal.classList.remove('modal-hidden');
-
             const currentBodyText = editor.getData();
-
             try {
-                const prompt = `Improve the following email body to be more engaging and persuasive. Retain the original meaning and any placeholders like {{ '{{First Name}}' }}. Provide only the improved body content as HTML.\n\nEmail Body:\n${currentBodyText}`;
+                const prompt = `Improve the following email body to be more engaging and persuasive. Retain the original meaning and any placeholders like {{First Name}}. Provide only the improved body content as HTML.\n\nEmail Body:\n${currentBodyText}`;
                 const payload = { contents: [{ parts: [{ text: prompt }] }] };
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                
                 const result = await response.json();
                 if (result.candidates && result.candidates[0].content.parts[0].text) {
                     editor.setData(result.candidates[0].content.parts[0].text.trim());
@@ -250,5 +264,6 @@
             }
         });
     });
+    {% endraw %}
 </script>
 {% endblock %}

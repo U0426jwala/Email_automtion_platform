@@ -1,142 +1,96 @@
 {% extends 'base.html' %}
-
 {% block title %}Email Campaigns - EmailFlow{% endblock %}
-
 {% block head_extra %}
 <style>
-    /* Styles for the campaign list page */
-    .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        border-bottom: 1px solid #dee2e6;
-        padding-bottom: 1rem;
-    }
-    .page-header h1 {
-        font-size: 2rem;
-        font-weight: 500;
-        color: #2c3e50;
-    }
-    .page-header p {
-        color: #7f8c8d;
-    }
-    .btn-primary {
-        background-color: #3498db;
-        color: white;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 5px;
-        font-size: 1rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
-    .btn-primary:hover {
-        background-color: #2980b9;
-    }
-    .table-container {
-        background: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        overflow: hidden;
-        border: 1px solid #e9ecef;
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        text-align: left;
-    }
-    th, td {
-        padding: 1rem;
-        border-bottom: 1px solid #e9ecef;
-    }
-    thead {
-        background-color: #f8f9fa;
-    }
-    th {
-        font-weight: 500;
-        color: #495057;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-    }
-    .action-link {
-        color: #3498db;
-        text-decoration: none;
-        font-weight: 500;
-    }
-    .action-link:hover {
-        text-decoration: underline;
-    }
-    .empty-state {
-        background: #ffffff;
-        padding: 3rem;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        text-align: center;
-        border: 1px solid #e9ecef;
-    }
-    .empty-state h2 {
-        font-size: 1.5rem;
-        color: #2c3e50;
-    }
-    .empty-state p {
-        color: #7f8c8d;
-        margin-top: 0.5rem;
-    }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .page-header h1 { font-size: 2rem; font-weight: 500; }
+    .btn { border: none; padding: 0.75rem 1.5rem; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .btn-primary { background-color: #3498db; color: white; }
+    .btn-secondary { background-color: #7f8c8d; color: white; margin-left: 0.5rem; }
+    .table-container { background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 1rem; border-bottom: 1px solid #e9ecef; }
+    /* Modal styles */
+    .modal { display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+    .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; }
+    .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <div>
-        <h1>Email Campaigns</h1>
-        <p>Create and manage your email campaigns</p>
-    </div>
-    <button id="create-campaign-btn" class="btn-primary">+ Create Campaign</button>
+    <h1>Email Campaigns</h1>
+    <a href="{{ url_for('campaign.create_campaign_view') }}" class="btn btn-primary">+ Create Campaign</a>
 </div>
 
-{% if not campaigns %}
-    <div class="empty-state">
-        <h2>No Campaigns Found</h2>
-        <p>You haven't created any email campaigns yet. Click the button above to get started!</p>
+<div class="table-container">
+    <table>
+        <thead>
+            <tr><th>Campaign Name</th><th>Subject</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            {% for campaign in campaigns %}
+            <tr>
+                <td>{{ campaign.name }}</td>
+                <td>{{ campaign.subject }}</td>
+                <td>{{ campaign.status }}</td>
+                <td>
+                    <a href="{{ url_for('campaign.preview_campaign', campaign_id=campaign.id) }}" class="btn">Preview</a>
+                    <button onclick="openSendModal({{ campaign.id }}, '{{ campaign.name|e }}')" class="btn btn-secondary">Send</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" style="text-align: center; padding: 2rem;">No campaigns found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="sendModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" onclick="closeSendModal()">&times;</span>
+        <h2>Send Campaign: <span id="modalCampaignName"></span></h2>
+        <p>Select a contact list to send this campaign to.</p>
+        <form id="sendForm" method="POST">
+            <div class="form-group">
+                <label for="list_id" style="display:block; margin-bottom:0.5rem;">Contact List:</label>
+                <select name="list_id" id="list_id" required style="width:100%; padding:0.5rem;">
+                    {% if lists %}
+                        {% for list in lists %}
+                        <option value="{{ list.id }}">{{ list.list_name }} ({{ list.total_records }} contacts)</option>
+                        {% endfor %}
+                    {% else %}
+                        <option disabled>No contact lists available</option>
+                    {% endif %}
+                </select>
+            </div>
+            <br>
+            <button type="submit" class="btn btn-primary">Send Now</button>
+        </form>
     </div>
-{% else %}
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Campaign Name</th>
-                    <th>Subject</th>
-                    <th>Status</th>
-                    <th>Created By</th>
-                    <th>Created At</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for campaign in campaigns %}
-                    <tr>
-                        <td>{{ campaign.name }}</td>
-                        <td>{{ campaign.subject }}</td>
-                        <td>{{ campaign.status }}</td>
-                        <td>{{ campaign.created_by }}</td>
-                        <td>{{ campaign.created_at.strftime('%Y-%m-%d %H:%M') if campaign.created_at else 'N/A' }}</td>
-                        <td>
-                            <a href="{{ url_for('campaign.preview_campaign', campaign_id=campaign.id) }}" class="action-link">Preview</a>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-{% endif %}
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.getElementById('create-campaign-btn').addEventListener('click', () => {
-        window.location.href = '{{ url_for('campaign.create_campaign_view') }}';
-    });
+    const modal = document.getElementById('sendModal');
+    const form = document.getElementById('sendForm');
+    const campaignNameSpan = document.getElementById('modalCampaignName');
+
+    function openSendModal(campaignId, campaignName) {
+        form.action = `{{ url_for('campaign.campaign_list') }}send/${campaignId}`;
+        campaignNameSpan.textContent = campaignName;
+        modal.style.display = 'block';
+    }
+
+    function closeSendModal() {
+        modal.style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            closeSendModal();
+        }
+    }
 </script>
 {% endblock %}

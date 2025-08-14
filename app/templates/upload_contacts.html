@@ -30,16 +30,20 @@
         font-size: 1rem;
         font-weight: 500;
         cursor: pointer;
-        transition: background-color 0.3s ease;
+        transition: all 0.3s ease;
         text-decoration: none;
         display: inline-flex;
         align-items: center;
+    }
+    .btn:disabled {
+        background-color: #bdc3c7;
+        cursor: not-allowed;
     }
     .btn-primary {
         background-color: #3498db;
         color: white;
     }
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
         background-color: #2980b9;
     }
     .btn-secondary {
@@ -147,11 +151,29 @@
         color: #7f8c8d;
         padding: 2rem;
     }
-    /* Flash Messages */
+    
+    /* Dynamic Flash Messages Container */
+    #flash-container {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 2000;
+        width: 350px;
+    }
     .flash-message {
         padding: 1rem;
         margin-bottom: 1rem;
         border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        opacity: 0;
+        transform: translateX(100%);
+        animation: slideIn 0.5s forwards;
+    }
+    @keyframes slideIn {
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
     }
     .flash-success {
         background-color: #d4edda;
@@ -168,6 +190,8 @@
 
 
 {% block content %}
+<div id="flash-container"></div>
+
 <div class="page-header">
     <div>
         <h1>My Contact Lists</h1>
@@ -191,25 +215,25 @@
 {% endwith %}
 
 <div id="create-list-form" class="form-container">
-    <h2>Create New List from CSV</h2>
-    <form id="upload-form" method="POST" action="{{ url_for('contact.lists') }}" enctype="multipart/form-data">
+    <h2>Create New List from CSV/XLSX</h2>
+    <form id="upload-form" action="{{ url_for('contact.create_and_upload_list') }}" method="POST" enctype="multipart/form-data">
         <div class="form-group">
             <label for="list_name">List Name:</label>
             <input type="text" id="list_name" name="list_name" required placeholder="e.g., Newsletter Subscribers, Webinar Attendees">
         </div>
         <div class="form-group">
-            <label for="file">Upload CSV File:</label>
+            <label for="file">Upload CSV or XLSX File:</label>
             <div id="drop-zone" class="drop-zone">
-                <input type="file" id="file" name="file" accept=".csv" class="hidden" required>
+                <input type="file" id="file" name="file" accept=".csv,.xlsx" class="hidden" required>
                 <div id="drop-text">
                     <i class="fas fa-cloud-upload-alt fa-3x" style="color: #bdc3c7; margin-bottom: 0.75rem;"></i>
-                    <p>Drag and drop your CSV file here or <span class="highlight">click to browse</span>.</p>
+                    <p>Drag and drop your file here or <span class="highlight">click to browse</span>.</p>
                 </div>
             </div>
         </div>
         <div class="form-actions">
             <button type="button" id="cancel-list-btn" class="btn btn-secondary">Cancel</button>
-            <button type="submit" class="btn btn-primary">Create & Upload</button>
+            <button type="submit" id="submit-btn" class="btn btn-primary">Create & Upload</button>
         </div>
     </form>
 </div>
@@ -225,17 +249,17 @@
                 <th>Created By</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="lists-table-body">
             {% for list_item in lists %}
             <tr>
                 <td>{{ list_item.list_name }}</td>
                 <td>{{ list_item.total_records }}</td>
                 <td>{{ list_item.list_type }}</td>
-                <td>{{ list_item.created_at.strftime('%Y-%m-%d %H:%M') if list_item.created_at else 'N/A' }}</td>
+                <td>{{ list_item.created_at.strftime('%d-%m-%Y %H:%M') if list_item.created_at else 'N/A' }}</td>
                 <td>{{ list_item.created_by }}</td>
             </tr>
             {% else %}
-            <tr>
+            <tr id="empty-row">
                 <td colspan="5" class="empty-row">No lists found. Create your first list!</td>
             </tr>
             {% endfor %}
@@ -248,25 +272,34 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // --- Element Selections ---
         const createListBtn = document.getElementById('create-list-btn');
         const createListForm = document.getElementById('create-list-form');
         const cancelListBtn = document.getElementById('cancel-list-btn');
         const uploadForm = document.getElementById('upload-form');
+        const submitBtn = document.getElementById('submit-btn');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file');
         const dropText = document.getElementById('drop-text');
+        const flashContainer = document.getElementById('flash-container');
         const originalDropText = dropText.innerHTML;
 
+        // --- UI Toggling ---
         createListBtn.addEventListener('click', () => {
             createListForm.style.display = 'block';
         });
 
-        cancelListBtn.addEventListener('click', () => {
+        const hideAndResetForm = () => {
             createListForm.style.display = 'none';
             uploadForm.reset();
             dropText.innerHTML = originalDropText;
-        });
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Create & Upload';
+        }
+
+        cancelListBtn.addEventListener('click', hideAndResetForm);
         
+        // --- Drag and Drop Logic ---
         dropZone.addEventListener('click', () => fileInput.click());
 
         fileInput.addEventListener('change', () => {
@@ -280,16 +313,65 @@
             dropZone.classList.add('dragover');
         });
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('dragover');
             if (e.dataTransfer.files.length) {
                 fileInput.files = e.dataTransfer.files;
-                dropText.textContent = `File selected: ${fileInput.files[0].name}`;
+                fileInput.dispatchEvent(new Event('change')); // Trigger change event
+            }
+        });
+
+        // --- Dynamic Flash Message Function ---
+        const showFlashMessage = (message, category = 'success') => {
+            const div = document.createElement('div');
+            div.className = `flash-message flash-${category}`;
+            div.textContent = message;
+            flashContainer.appendChild(div);
+            setTimeout(() => {
+                div.style.opacity = '0';
+                div.style.transform = 'translateX(100%)';
+                setTimeout(() => div.remove(), 500);
+            }, 5000); // Message disappears after 5 seconds
+        };
+        
+        // --- AJAX Form Submission ---
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent the default page reload
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            
+            const formData = new FormData(uploadForm);
+            const actionUrl = uploadForm.getAttribute('action');
+
+            try {
+                const response = await fetch(actionUrl, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showFlashMessage(result.message, 'success');
+                    // Simple refresh to show the new list.
+                    // A more advanced implementation could add the row dynamically.
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    // Handle server-side errors (e.g., validation, database errors)
+                    showFlashMessage(result.message || 'An unknown error occurred.', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Create & Upload';
+                }
+            } catch (error) {
+                // Handle network errors
+                console.error('Submission Error:', error);
+                showFlashMessage('A network error occurred. Please try again.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Create & Upload';
             }
         });
     });

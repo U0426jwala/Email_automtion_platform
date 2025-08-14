@@ -8,6 +8,7 @@ from .routes.sequence_routes import sequence_bp
 from .routes.main_routes import main_bp
 from .routes.scheduler_routes import scheduler_bp
 from flask_login import LoginManager
+from .routes.reports_routes import reports_bp 
 
 def create_app():
     app = Flask(__name__)
@@ -25,6 +26,7 @@ def create_app():
     app.register_blueprint(sequence_bp, url_prefix='/sequences')
     app.register_blueprint(main_bp)  # No prefix for main routes, keeping at root level
     app.register_blueprint(scheduler_bp, url_prefix='/scheduler')
+    app.register_blueprint(reports_bp)
 
     from .models.user import User
     @login_manager.user_loader

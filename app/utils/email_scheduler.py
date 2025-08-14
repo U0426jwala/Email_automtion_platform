@@ -1,147 +1,106 @@
-import os
-from boto3 import client
-from app.config import Config
 import logging
-from datetime import datetime, timedelta
-import mysql.connector
-from mysql.connector import Error
-from app.models.sequence import get_sent_emails_for_step
-from app.models.contact import delete_bounced_emails, update_contact_sent_status, get_bounced_emails as get_db_bounced_emails, get_replied_emails as get_db_replied_emails
-from app.models.ses_config import get_ses_configs
-from app.models.log import get_db_connection
+from app.models.sequence import get_db_connection, get_last_sent_email_for_contact
+from app.models.contact import get_contacts_for_list, get_bounced_emails, get_replied_emails
+from app.models.log import SentEmail
+from app.utils.email_sender import send_email
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-ses_client = None
-SENDER_EMAIL = None
+def build_reply_body(new_body_template, prev_email, contact_name):
+    """
+    Formats the new email body to quote the previous message, creating a thread.
+    """
+    new_body = new_body_template.replace('{{First Name}}', contact_name)
+    prev_body = prev_email.get('campaign_body', '')
+    prev_sent_at = prev_email.get('sent_at')
+    prev_body_personalized = prev_body.replace('{{First Name}}', contact_name)
+    sent_date_str = "an earlier date"
+    if prev_sent_at:
+        sent_date_str = prev_sent_at.strftime("%a, %b %d, %Y at %I:%M %p")
+    sender_email = os.getenv('SENDER_EMAIL', 'you')
 
-def initialize_ses_client():
-    global ses_client, SENDER_EMAIL
-    if ses_client and SENDER_EMAIL:
-        return True
+    return f"""
+    <div style="font-family: sans-serif; font-size: 1rem;">{new_body}</div>
+    <br>
+    <div style="color: #5e5e5e;">
+        On {sent_date_str}, {sender_email} wrote:
+        <blockquote style="margin: 0 0 0 .8ex; border-left: 1px #ccc solid; padding-left: 1ex;">
+            {prev_body_personalized}
+        </blockquote>
+    </div>
+    """
 
-    configs = get_ses_configs()
-    if not configs:
-        logger.error("No SES configurations found in the database.")
-        return False
-
-    ses_config = configs[0]
+def process_sequence_step(step):
+    """High-level function to process a single due step."""
+    logger.info(f"Processing Step ID: {step['id']} for Sequence ID: {step['sequence_id']}")
     
     try:
-        ses_client = client(
-            'ses',
-            region_name=ses_config['aws_region'],
-            aws_access_key_id=Config.SES_ACCESS_KEY,
-            aws_secret_access_key=Config.SES_SECRET_KEY
-        )
-        SENDER_EMAIL = ses_config['sender_email']
-        logger.info(f"SES client initialized with sender: {SENDER_EMAIL} and region: {ses_config['aws_region']}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to initialize SES client: {e}")
-        return False
-
-def get_db_connection():
-    try:
-        return mysql.connector.connect(
-            host=Config.MYSQL_HOST,
-            user=Config.MYSQL_USER,
-            password=Config.MYSQL_PASSWORD,
-            database=Config.MYSQL_DB,
-            connection_timeout=10
-        )
-    except Error as e:
-        logger.error(f"Error establishing database connection: {e}")
-        return None
-
-def schedule_sequence_step(sequence_id, step):
-    if not initialize_ses_client():
-        logger.error("SES client not initialized. Cannot send emails.")
-        return
-
-    connection = None
-    cursor = None
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True) # Use dictionary cursor for easier access
-
-        campaign_id = step['campaign_id']
-        campaign_query = "SELECT subject, body FROM campaigns WHERE id = %s"
-        cursor.execute(campaign_query, (campaign_id,))
-        campaign = cursor.fetchone()
-        if not campaign:
-            logger.error(f"Campaign with ID {campaign_id} not found for sequence step {step['id']}")
-            return
-
-        subject = campaign['subject']
-        body = campaign['body']
-
-        list_id_query = "SELECT list_id FROM sequences WHERE id = %s"
-        cursor.execute(list_id_query, (sequence_id,))
-        list_id_result = cursor.fetchone()
-        if not list_id_result:
-            logger.error(f"List ID not found for sequence {sequence_id}")
-            return
-        list_id = list_id_result['list_id']
-
-        contacts_query = "SELECT id, name, email, location, company_name FROM contacts WHERE list_id = %s"
-        cursor.execute(contacts_query, (list_id,))
-        all_contacts = cursor.fetchall()
-
+        all_contacts = get_contacts_for_list(step['list_id'])
         if not all_contacts:
-            logger.info(f"No contacts found for list {list_id} of sequence {sequence_id}")
+            logger.warning(f"No contacts found for list ID {step['list_id']}. Skipping step.")
             return
 
-        bounced_emails = get_db_bounced_emails()
-        replied_emails = get_db_replied_emails()
-        emails_sent_for_this_step = get_sent_emails_for_step(sequence_id, step['id'])
+        bounced_emails = get_bounced_emails()
+        replied_emails = get_replied_emails()
 
-        valid_contacts_to_send = []
-        for contact in all_contacts:
-            if contact['email'] not in bounced_emails and \
-               contact['email'] not in replied_emails and \
-               contact['email'] not in emails_sent_for_this_step:
-                valid_contacts_to_send.append(contact)
+        valid_contacts = [
+            c for c in all_contacts 
+            if c['email'] not in bounced_emails and c['email'] not in replied_emails
+        ]
 
-        if not valid_contacts_to_send:
-            logger.info(f"No valid contacts to send to for sequence {sequence_id}, step {step['id']}")
-            return
+        logger.info(f"Found {len(valid_contacts)} valid contacts to email for Step ID: {step['id']}.")
 
-        delete_bounced_emails(bounced_emails)
+        for contact in valid_contacts:
+            subject = step['campaign_subject']
+            body = step['campaign_body']
+            in_reply_to = None
+            references = None
 
-        for contact in valid_contacts_to_send:
-            try:
-                formatted_body = body.replace('{{First Name}}', contact.get('name', '')) \
-                                     .replace('{{Email}}', contact.get('email', '')) \
-                                     .replace('{{Location}}', contact.get('location', '')) \
-                                     .replace('{{Company}}', contact.get('company_name', ''))
+            if step.get('is_re_reply'):
+                previous_email = get_last_sent_email_for_contact(step['sequence_id'], contact['id'])
+                if previous_email:
+                    in_reply_to = previous_email.get('message_id')
+                    references = previous_email.get('message_id')
+                    if not previous_email.get('subject', '').lower().startswith('re:'):
+                         subject = f"Re: {previous_email.get('subject', '')}"
+                    else:
+                         subject = previous_email.get('subject', '')
+                    body = build_reply_body(body, previous_email, contact['name'])
 
-                subject_line = subject
-                if step.get('is_re_reply'):
-                    subject_line = f"RE: {subject_line}"
+            message_id = send_email(
+                recipient_email=contact['email'],
+                subject=subject.replace('{{First Name}}', contact.get('name', '')),
+                html_body=body.replace('{{First Name}}', contact.get('name', '')),
+                in_reply_to=in_reply_to,
+                references=references
+            )
 
-                ses_client.send_email(
-                    Source=SENDER_EMAIL,
-                    Destination={'ToAddresses': [contact['email']]},
-                    Message={
-                        'Subject': {'Data': subject_line},
-                        'Body': {'Html': {'Data': formatted_body}}
-                    }
+            # CORRECTED: Get the user_id from the step dictionary, not current_user
+            user_id_for_log = step.get('user_id')
+
+            if message_id:
+                SentEmail.log_email(
+                    user_id=user_id_for_log,
+                    contact_id=contact['id'],
+                    subject=subject,
+                    status='sent',
+                    campaign_id=step.get('campaign_id'),
+                    sequence_id=step.get('sequence_id'),
+                    step_id=step.get('id'),
+                    message_id=message_id
                 )
-                logger.info(f"Email sent to {contact['email']} for sequence {sequence_id}, step {step['day']} with subject: {subject_line}")
-                
-                # This function now handles logging the sent email to the database
-                update_contact_sent_status(contact['email'], sequence_id, step['id'], subject_line)
+            else:
+                SentEmail.log_email(
+                    user_id=user_id_for_log,
+                    contact_id=contact['id'],
+                    subject=subject,
+                    status='failed',
+                    campaign_id=step.get('campaign_id'),
+                    sequence_id=step.get('sequence_id'),
+                    step_id=step.get('id')
+                )
 
-            except Exception as e:
-                logger.error(f"Failed to send email to {contact['email']} for sequence {sequence_id}, step {step['id']}: {e}")
-                # Optional: You might want to log a 'failed' status here in a similar way
-
-    except Error as e:
-        logger.error(f"Database error in schedule_sequence_step for sequence {sequence_id}: {e}")
-    finally:
-        if cursor:
-            cursor.close()
-        if connection and connection.is_connected():
-            connection.close()
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in process_sequence_step for step ID {step['id']}: {e}", exc_info=True)
