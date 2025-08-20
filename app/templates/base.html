@@ -236,7 +236,8 @@
         <a href="{{ url_for('main.home') }}" class="logo">EmailFlow</a>
         <nav class="main-nav">
             <ul>
-                <li><a href="{{ url_for('ses.configure_ses') }}">SES Config</a></li>
+                
+                <li><a href="{{ url_for('smtp.configure') }}">SMTP Config</a></li>
                 <li><a href="{{ url_for('campaign.campaign_list') }}">Mailers</a></li>
                 <li><a href="{{ url_for('contact.lists') }}">Contacts</a></li>
                 <li><a href="{{ url_for('sequence.list_sequences') }}">Sequences</a></li>
@@ -245,13 +246,19 @@
         </nav>
         <div class="user-info">
               {% if current_user.is_authenticated %}
-                  <span>{{ current_user.email }}</span>
-                  <a href="{{ url_for('auth.logout') }}" title="Sign Out"><i class="fas fa-sign-out-alt"></i></a>
+                  <span>{{ current_user.username }}</span> <a href="{{ url_for('auth.logout') }}" title="Sign Out"><i class="fas fa-sign-out-alt"></i></a>
               {% endif %}
         </div>
     </header>
 
     <main class="main-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </main>
     

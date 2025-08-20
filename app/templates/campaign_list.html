@@ -4,23 +4,27 @@
 <style>
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
     .page-header h1 { font-size: 2rem; font-weight: 500; }
-    .btn { border: none; padding: 0.75rem 1.5rem; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .btn { border: none; padding: 0.75rem 1.5rem; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
     .btn-primary { background-color: #3498db; color: white; }
-    .btn-secondary { background-color: #7f8c8d; color: white; margin-left: 0.5rem; }
-    .table-container { background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .btn-secondary { background-color: #7f8c8d; color: white; }
+    .btn-danger { background-color: #e74c3c; color: white; }
+    .actions-cell { display: flex; gap: 0.5rem; }
+    .table-container { background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto;}
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th, td { padding: 1rem; border-bottom: 1px solid #e9ecef; }
-    /* Modal styles */
     .modal { display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
-    .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; }
+    .modal-content { background-color: #fefefe; margin: 10% auto; padding: 2rem; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 8px; }
     .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: block; margin-bottom: 0.75rem; font-weight: 500; }
+    .form-group select { width: 100%; padding: 0.75rem; border-radius: 5px; border: 1px solid #ccc;}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Email Campaigns</h1>
-    <a href="{{ url_for('campaign.create_campaign_view') }}" class="btn btn-primary">+ Create Campaign</a>
+    <h1>Email Campaigns (Mailers)</h1>
+    <a href="{{ url_for('campaign.create_campaign_view') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Create New Mailer</a>
 </div>
 
 <div class="table-container">
@@ -33,10 +37,15 @@
             <tr>
                 <td>{{ campaign.name }}</td>
                 <td>{{ campaign.subject }}</td>
-                <td>{{ campaign.status }}</td>
+                <td><span class="status-badge status-{{ campaign.status|lower }}">{{ campaign.status }}</span></td>
                 <td>
-                    <a href="{{ url_for('campaign.preview_campaign', campaign_id=campaign.id) }}" class="btn">Preview</a>
-                    <button onclick="openSendModal({{ campaign.id }}, '{{ campaign.name|e }}')" class="btn btn-secondary">Send</button>
+                    <div class="actions-cell">
+                        <a href="{{ url_for('campaign.preview_campaign', campaign_id=campaign.id) }}" class="btn btn-light">Preview</a>
+                        <button onclick="openSendModal({{ campaign.id }}, '{{ campaign.name|e }}')" class="btn btn-secondary">Send</button>
+                        <form action="{{ url_for('campaign.delete_campaign_route', campaign_id=campaign.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this campaign? This action cannot be undone.');">
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -50,22 +59,38 @@
     <div class="modal-content">
         <span class="close-button" onclick="closeSendModal()">&times;</span>
         <h2>Send Campaign: <span id="modalCampaignName"></span></h2>
-        <p>Select a contact list to send this campaign to.</p>
+        <p>Select a contact list and sending service.</p>
         <form id="sendForm" method="POST">
+            
             <div class="form-group">
-                <label for="list_id" style="display:block; margin-bottom:0.5rem;">Contact List:</label>
-                <select name="list_id" id="list_id" required style="width:100%; padding:0.5rem;">
+                <label for="sending_config">Send Using:</label>
+                <select name="sending_config" id="sending_config" required>
+                    <option value="" disabled selected>-- Select an SMTP service --</option>
+                    
+                    {% if smtp_configs %}
+                        {% for config in smtp_configs %}
+                            <option value="{{ config.id }}">SMTP: {{ config.name }} ({{ config.username }})</option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="" disabled>No SMTP configurations found</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="list_id">To Contact List:</label>
+                <select name="list_id" id="list_id" required>
                     {% if lists %}
+                        <option value="" disabled selected>-- Select a contact list --</option>
                         {% for list in lists %}
                         <option value="{{ list.id }}">{{ list.list_name }} ({{ list.total_records }} contacts)</option>
                         {% endfor %}
                     {% else %}
-                        <option disabled>No contact lists available</option>
+                        <option value="" disabled>No contact lists available</option>
                     {% endif %}
                 </select>
             </div>
-            <br>
-            <button type="submit" class="btn btn-primary">Send Now</button>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.8rem;">Send Now</button>
         </form>
     </div>
 </div>
@@ -78,7 +103,7 @@
     const campaignNameSpan = document.getElementById('modalCampaignName');
 
     function openSendModal(campaignId, campaignName) {
-        form.action = `{{ url_for('campaign.campaign_list') }}send/${campaignId}`;
+        form.action = `{{ url_for('campaign.send_campaign', campaign_id=0) }}`.replace('0', campaignId);
         campaignNameSpan.textContent = campaignName;
         modal.style.display = 'block';
     }

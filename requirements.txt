@@ -8,5 +8,6 @@ pandas
 Flask-Login
 Flask-WTF
 langchain-google-genai
+cryptography
 
 

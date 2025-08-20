@@ -1,50 +1,59 @@
 # app/utils/email_sender.py
-import boto3
-from botocore.exceptions import ClientError
-import logging
 import os
+import logging
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+# Simplified imports - no more boto3 or SES models
+from app.models.smtp_config import get_smtp_config_by_id
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def send_email(recipient_email, subject, html_body, in_reply_to=None, references=None):
+def send_email(config_id, recipient_email, subject, html_body, in_reply_to=None, references=None):
     """
-    Sends an email using AWS SES with optional headers for threading.
-    Returns the Message ID on success, None on failure.
+    Sends an email using a specified SMTP configuration.
     """
-    aws_region = os.getenv('AWS_REGION')
-    sender_email = os.getenv('SENDER_EMAIL')
-
-    if not sender_email or not aws_region:
-        logger.error("FATAL: SENDER_EMAIL or AWS_REGION environment variable is not set.")
+    # Get the chosen SMTP configuration from the database
+    config = get_smtp_config_by_id(config_id)
+    if not config:
+        logger.error(f"SMTP configuration with ID {config_id} not found.")
         return None
 
-    ses_client = boto3.client('ses', region_name=aws_region)
-    
+    host = config['host']
+    port = config['port']
+    username = config['username']
+    password = config['password']
+    use_tls = config.get('use_tls', True)
+    from_email = config['from_email']
+    from_name = config.get('from_name')
+
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
-    msg['From'] = sender_email
+    if from_name:
+        msg['From'] = f'"{from_name}" <{from_email}>'
+    else:
+        msg['From'] = from_email
     msg['To'] = recipient_email
-    
-    # CRITICAL: These headers create the email thread in clients like Gmail/Outlook
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
     if references:
         msg['References'] = references
-
+    
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     try:
-        response = ses_client.send_raw_email(
-            Source=msg['From'],
-            Destinations=[msg['To']],
-            RawMessage={'Data': msg.as_string()}
-        )
-        message_id = response['MessageId']
-        logger.info(f"Email sent to {recipient_email}. Message ID: {message_id}")
-        return message_id
-    except ClientError as e:
-        logger.error(f"Failed to send email to {recipient_email}: {e.response['Error']['Message']}")
+        server = smtplib.SMTP(host, port, timeout=10)
+        if use_tls:
+            server.starttls()
+        
+        server.login(username, password)
+        server.sendmail(from_email, recipient_email, msg.as_string())
+        server.quit()
+        logger.info(f"Email sent via SMTP to {recipient_email} using {host}")
+        # In SMTP, there's no standard message ID, so we can return a success indicator
+        return "smtp-sent-successfully" 
+    except Exception as e:
+        logger.error(f"Failed to send email via SMTP to {recipient_email}: {e}")
         return None

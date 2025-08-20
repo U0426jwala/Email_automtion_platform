@@ -3,12 +3,11 @@ from mysql.connector import Error
 from app.config import Config
 import logging
 from datetime import datetime
-import os # <-- IMPORT ADDED
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- CORRECTED DATABASE CONNECTION ---
 def get_db_connection():
     """Establishes and returns a database connection."""
     try:
@@ -24,7 +23,6 @@ def get_db_connection():
         logger.error(f"Error establishing database connection: {e}")
         return None
         
-# --- NOTE: All direct connection calls below are replaced by get_db_connection() ---
 def create_campaign(name, subject, body, created_by, status='draft'):
     """Creates a new campaign in the database."""
     connection = get_db_connection()
@@ -77,6 +75,25 @@ def get_campaign(campaign_id):
     except Error as e:
         logger.error(f"Error fetching campaign {campaign_id}: {e}")
         return None
+    finally:
+        if connection.is_connected():
+            connection.close()
+
+# NEW: Function to delete a campaign from the database
+def delete_campaign(campaign_id):
+    """Deletes a campaign from the database by its ID."""
+    connection = get_db_connection()
+    if not connection: return False
+    try:
+        with connection.cursor() as cursor:
+            # You may also want to delete related records (tags, logs) here in a transaction
+            cursor.execute("DELETE FROM campaigns WHERE id = %s", (campaign_id,))
+            connection.commit()
+        logger.info(f"Successfully deleted campaign with ID: {campaign_id}")
+        return True
+    except Error as e:
+        logger.error(f"Error deleting campaign ID {campaign_id}: {e}")
+        return False
     finally:
         if connection.is_connected():
             connection.close()

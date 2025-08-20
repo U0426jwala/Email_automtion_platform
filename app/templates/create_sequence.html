@@ -1,29 +1,60 @@
-{% extends 'base.html' %} {# Assumes you have a base.html file #}
+{% extends 'base.html' %} 
 
 {% block title %}Create New Sequence{% endblock %}
 
 {% block content %}
-<div class="container">
+<style>
+    .toggle-container { display: flex; align-items: center; gap: 15px; margin-top: 1rem; padding: 10px; border-radius: 8px; background-color: #f8f9fa; border: 1px solid #dee2e6; }
+    .toggle-label { margin-bottom: 0; font-weight: 500; cursor: pointer; }
+    .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
+    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #007bff; }
+    input:checked + .slider:before { transform: translateX(22px); }
+    .step-card { border: 1px solid #ddd; padding: 1.5rem; border-radius: var(--border-radius); margin-top: 1.5rem; background-color: #fdfdfd; }
+</style>
+
+<div class="page-header">
     <h1>Create New Email Sequence</h1>
+</div>
+
+<div class="card">
     <form method="POST">
         <div class="form-group">
             <label for="sequence_name">Sequence Name</label>
-            <input type="text" class="form-control" id="sequence_name" name="sequence_name" required>
+            <input type="text" class="form-control" id="sequence_name" name="sequence_name" required placeholder="e.g., New Client Onboarding">
+        </div>
+        
+        <div class="form-group">
+            <label for="sending_config">Send Using:</label>
+            <select name="sending_config" id="sending_config" class="form-control" required>
+                <option value="" disabled selected>-- Select an SMTP service --</option>
+                
+                {% if smtp_configs %}
+                    {% for config in smtp_configs %}
+                        <option value="{{ config.id }}">SMTP: {{ config.name }} ({{ config.username }})</option>
+                    {% endfor %}
+                {% else %}
+                    <option value="" disabled>No SMTP configurations found</option>
+                {% endif %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Contact List (for entire sequence)</label>
+            <select name="list_id" class="form-control" required>
+                <option value="">-- Select List --</option>
+                {% for list in lists %}
+                <option value="{{ list.id }}">{{ list.list_name }}</option>
+                {% endfor %}
+            </select>
         </div>
         <hr>
         
+        <h3 style="margin-top: 2rem;">Sequence Steps</h3>
         <div id="steps-container">
             <div class="step-card" id="step-1">
                 <h4>Step 1</h4>
-                <div class="form-group">
-                    <label>Contact List (for entire sequence)</label>
-                    <select name="step[1][list_id]" class="form-control" required>
-                        <option value="">-- Select List --</option>
-                        {% for list in lists %}
-                        <option value="{{ list.id }}">{{ list.list_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
                 <div class="form-group">
                     <label>Campaign</label>
                     <select name="step[1][campaign_id]" class="form-control" required>
@@ -40,8 +71,8 @@
             </div>
         </div>
 
-        <button type="button" class="btn btn-secondary mt-3" onclick="addStep()">+ Add Step</button>
-        <hr>
+        <button type="button" class="btn btn-secondary" style="margin-top: 1rem;" onclick="addStep()">+ Add Another Step</button>
+        <hr style="margin-top: 2rem;">
         <button type="submit" class="btn btn-primary">Create Sequence</button>
     </form>
 </div>
@@ -55,19 +86,21 @@
         stepCounter++;
         const container = document.getElementById('steps-container');
         const newStep = document.createElement('div');
-        newStep.className = 'step-card mt-3';
+        newStep.className = 'step-card';
         newStep.id = `step-${stepCounter}`;
 
-        // Create options for campaign dropdown dynamically
         const campaignOptions = `
             <option value="">-- Select Campaign --</option>
             {% for campaign in campaigns %}
-            <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+            <option value="{{ campaign.id }}">{{ campaign.name|e }}</option>
             {% endfor %}
         `;
 
         newStep.innerHTML = `
-            <h4>Step ${stepCounter}</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h4>Step ${stepCounter}</h4>
+                <button type="button" class="btn btn-danger" onclick="removeStep(${stepCounter})">Remove</button>
+            </div>
             <div class="form-group">
                 <label>Campaign</label>
                 <select name="step[${stepCounter}][campaign_id]" class="form-control" required>
@@ -78,11 +111,13 @@
                 <label>Schedule Date & Time</label>
                 <input type="datetime-local" name="step[${stepCounter}][schedule_time]" class="form-control" required>
             </div>
-            <div class="form-check">
-                <input type="checkbox" class="form-check-input" name="step[${stepCounter}][is_re_reply]" id="reply-${stepCounter}">
-                <label class="form-check-label" for="reply-${stepCounter}">Reply to Previous Email (creates a thread)</label>
+            <div class="toggle-container">
+                <label class="switch">
+                    <input type="checkbox" name="step[${stepCounter}][is_re_reply]">
+                    <span class="slider"></span>
+                </label>
+                <label class="toggle-label">Reply to Previous Email (creates a thread)</label>
             </div>
-            <button type="button" class="btn btn-danger btn-sm mt-2" onclick="removeStep(${stepCounter})">Remove Step</button>
         `;
         container.appendChild(newStep);
     }

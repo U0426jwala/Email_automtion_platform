@@ -90,3 +90,15 @@ def get_scheduled_monthly_count(year, month):
     except Exception as e:
         logger.error(f"Error in get_scheduled_monthly_count: {e}")
         return 0
+
+def get_bounced_emails_report():
+    """Fetches all records from the bounced_emails table for reporting."""
+    query = "SELECT email, bounced_at FROM bounced_emails ORDER BY bounced_at DESC"
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(dictionary=True) as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+    except Exception as e:
+        logger.error(f"Error in get_bounced_emails_report: {e}")
+        return []

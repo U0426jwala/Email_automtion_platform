@@ -1,7 +1,11 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask import (Blueprint, render_template, request, flash, redirect, url_for,
+                   jsonify, send_from_directory)
 from flask_login import login_required, current_user
-# CORRECTED: The import name is now 'get_contacts_for_list'
-from app.models.contact import create_list, save_contact, get_lists, get_contacts_for_list, update_list_records_count
+from app.models.contact import (
+    create_list, save_contact, get_lists, get_contacts_for_list,
+    update_list_records_count, delete_contact_by_id, get_list_by_id,
+    delete_list_by_id
+)
 from app.utils.csv_processor import process_csv
 import logging
 
@@ -13,86 +17,101 @@ contact_bp = Blueprint('contact', __name__)
 @contact_bp.route('/lists', methods=['GET'])
 @login_required
 def lists():
-    """
-    Handles displaying the main contact lists page. The POST logic for creating a
-    list from this page has been moved to a dedicated function for clarity.
-    """
     all_lists = get_lists()
     return render_template('upload_contacts.html', lists=all_lists)
 
-@contact_bp.route('/create_and_upload', methods=['POST'])
+@contact_bp.route('/download_sample')
 @login_required
-def create_and_upload_list():
-    """
-    Handles creating a new list and uploading contacts from a CSV in a single action.
-    This is used by the modal on the 'Create Sequence' page.
-    """
+def download_sample_csv():
     try:
-        list_name = request.form.get('list_name')
-        file = request.files.get('file')
+        return send_from_directory('static/samples', 'Sample_list.csv', as_attachment=True)
+    except FileNotFoundError:
+        flash('Sample file not found on the server.', 'error')
+        return redirect(url_for('contact.lists'))
 
-        if not list_name or not file or not file.filename:
-            return jsonify({'status': 'error', 'message': 'List name and a CSV file are required.'}), 400
+@contact_bp.route('/delete_list/<int:list_id>', methods=['POST'])
+@login_required
+def delete_list(list_id):
+    list_to_delete = get_list_by_id(list_id)
+    if not list_to_delete:
+        flash('List not found.', 'error')
+        return redirect(url_for('contact.lists'))
 
-        if not file.filename.lower().endswith('.csv'):
-            return jsonify({'status': 'error', 'message': 'Please upload a valid CSV file.'}), 400
+    if delete_list_by_id(list_id):
+        flash(f"Successfully deleted list '{list_to_delete['list_name']}' and its contacts.", 'success')
+    else:
+        flash('An error occurred while trying to delete the list.', 'error')
+
+    return redirect(url_for('contact.lists'))
+
+@contact_bp.route('/upload_contacts', methods=['POST'])
+@login_required
+def upload_contacts_file():
+    list_name = request.form.get('list_name')
+    csv_file = request.files.get('file')
+
+    if not list_name or not csv_file:
+        return jsonify({'message': 'List name and CSV file are required.'}), 400
+
+    list_id = create_list(list_name, current_user.id)
+    if not list_id:
+        return jsonify({'message': 'Failed to create list. A list with this name may already exist.'}), 400
+
+    try:
+        saved, skipped, errors = process_csv(csv_file, list_id)
+        update_list_records_count(list_id)
         
-        # --- Transactional Logic ---
-        # 1. Create a new list
-        list_id = create_list(list_name, current_user.username)
-        if not list_id:
-            return jsonify({'status': 'error', 'message': 'Failed to create the new list in the database.'}), 500
+        message = f"Uploaded {saved} contacts. Skipped {skipped} duplicates."
+        if errors:
+            message += f" Encountered {len(errors)} errors."
 
-        # 2. Process the CSV and save contacts
-        contacts_data = process_csv(file)
-        contacts_saved = 0
-        for name, email, location, company_name in contacts_data:
-            if save_contact(list_id, name, email, location, company_name):
-                contacts_saved += 1
-            else:
-                logger.warning(f"Failed to save contact from CSV: {email}")
-        
-        # 3. Update the final count
-        update_list_records_count(list_id, contacts_saved)
+        return jsonify({'message': message}), 200
 
-        # 4. Return success with the new list's data
-        new_list_data = {
-            'id': list_id,
-            'list_name': list_name,
-            'total_records': contacts_saved
-        }
-
-        return jsonify({
-            'status': 'success', 
-            'message': f"List '{list_name}' created with {contacts_saved} contacts!",
-            'list': new_list_data # Send the new list data back to the frontend
-        }), 200
-
-    except ValueError as e:
-        return jsonify({'status': 'error', 'message': f'CSV processing error: {e}'}), 400
     except Exception as e:
-        logger.error(f"Error during list creation and upload: {e}")
-        return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {str(e)}'}), 500
+        logger.error(f"Error during CSV processing: {e}")
+        return jsonify({'message': f"An unexpected error occurred: {e}"}), 500
 
-# The following routes are for other functionalities and remain unchanged
 @contact_bp.route('/add_contact/<int:list_id>', methods=['GET', 'POST'])
 @login_required
 def add_contact(list_id):
+    list_details = get_list_by_id(list_id)
+    if not list_details:
+        flash('The requested list does not exist.', 'error')
+        return redirect(url_for('contact.lists'))
+
     if request.method == 'POST':
         name = request.form.get('name')
         email = request.form.get('email')
         location = request.form.get('location')
         company_name = request.form.get('company_name')
-        segment = request.form.get('segment')
-        if save_contact(list_id, name, email, location, company_name, segment):
+
+        if not name or not email:
+            flash('Name and Email are required fields.', 'error')
+        elif save_contact(list_id, name, email, location, company_name):
+            update_list_records_count(list_id)
             flash(f"Contact '{name}' added successfully!", 'success')
-            return redirect(url_for('contact.lists'))
-        flash('Failed to add contact.', 'error')
-    return render_template('add_contact.html', list_id=list_id)
+            return redirect(url_for('contact.view_contacts', list_id=list_id))
+        else:
+            flash('Failed to add contact. The email might already exist.', 'error')
+
+    return render_template('add_contact.html', list_id=list_id, list_details=list_details)
 
 @contact_bp.route('/view_contacts/<int:list_id>', methods=['GET'])
 @login_required
 def view_contacts(list_id):
-    # CORRECTED: The function call now uses the correct name
     contacts = get_contacts_for_list(list_id)
-    return render_template('view_contacts.html', contacts=contacts, list_id=list_id)
+    list_details = get_list_by_id(list_id)
+    if not list_details:
+        flash('The requested list does not exist.', 'error')
+        return redirect(url_for('contact.lists'))
+    return render_template('view_contacts.html', contacts=contacts, list_id=list_id, list_details=list_details)
+
+@contact_bp.route('/delete_contact/<int:list_id>/<int:contact_id>', methods=['POST'])
+@login_required
+def delete_contact(list_id, contact_id):
+    if delete_contact_by_id(contact_id):
+        update_list_records_count(list_id)
+        flash('Contact deleted successfully.', 'success')
+    else:
+        flash('Failed to delete contact.', 'error')
+    return redirect(url_for('contact.view_contacts', list_id=list_id))

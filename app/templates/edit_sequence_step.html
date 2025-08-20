@@ -3,6 +3,64 @@
 {% block title %}Edit Sequence Step{% endblock %}
 
 {% block content %}
+<style>
+    /* --- ADDED: CSS for the toggle switch --- */
+    .toggle-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-top: 1rem;
+        padding: 10px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+    }
+    .toggle-label {
+        margin-bottom: 0;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 28px;
+    }
+    .switch input { 
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 28px;
+    }
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 20px;
+        width: 20px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    input:checked + .slider {
+        background-color: #007bff;
+    }
+    input:checked + .slider:before {
+        transform: translateX(22px);
+    }
+</style>
+
 <div style="max-width: 700px; margin: auto;">
     <div class="card">
         <h1 style="text-align: center;">Edit Step {{ step.step_number }}</h1>
@@ -12,7 +70,7 @@
         <form method="POST">
             <div>
                 <label for="campaign_id">Mailer Campaign</label>
-                <select id="campaign_id" name="campaign_id" required>
+                <select id="campaign_id" name="campaign_id" class="form-control" required>
                     <option value="">-- Select a Campaign --</option>
                     {% for campaign in campaigns %}
                         <option value="{{ campaign.id }}" {% if campaign.id == step.campaign_id %}selected{% endif %}>
@@ -21,11 +79,21 @@
                     {% endfor %}
                 </select>
             </div>
-            <div>
+            <div style="margin-top: 1.5rem;">
                 <label for="schedule_time">Schedule Date & Time</label>
-                <input type="datetime-local" id="schedule_time" name="schedule_time" 
+                <input type="datetime-local" id="schedule_time" name="schedule_time" class="form-control"
                        value="{{ step.schedule_time.strftime('%Y-%m-%dT%H:%M') if step.schedule_time else '' }}" required>
             </div>
+            
+            {% if step.step_number > 1 %}
+            <div class="toggle-container">
+                <label class="switch">
+                    <input type="checkbox" name="is_re_reply" {% if step.is_re_reply %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+                <label class="toggle-label">Reply to Previous Email (creates a thread)</label>
+            </div>
+            {% endif %}
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
                 <a href="{{ url_for('sequence.manage_sequence', sequence_id=step.sequence_id) }}" class="btn btn-secondary">Cancel</a>

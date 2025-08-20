@@ -1,3 +1,5 @@
+# app/utils/email_scheduler.py
+
 import logging
 from app.models.sequence import get_db_connection, get_last_sent_email_for_contact
 from app.models.contact import get_contacts_for_list, get_bounced_emails, get_replied_emails
@@ -9,9 +11,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def build_reply_body(new_body_template, prev_email, contact_name):
-    """
-    Formats the new email body to quote the previous message, creating a thread.
-    """
     new_body = new_body_template.replace('{{First Name}}', contact_name)
     prev_body = prev_email.get('campaign_body', '')
     prev_sent_at = prev_email.get('sent_at')
@@ -32,8 +31,9 @@ def build_reply_body(new_body_template, prev_email, contact_name):
     </div>
     """
 
+# --- MODIFICATION: Changed the function name back to what scheduler.py expects ---
 def process_sequence_step(step):
-    """High-level function to process a single due step."""
+    """Processes a single due step, now using the specified sending configuration."""
     logger.info(f"Processing Step ID: {step['id']} for Sequence ID: {step['sequence_id']}")
     
     try:
@@ -70,6 +70,8 @@ def process_sequence_step(step):
                     body = build_reply_body(body, previous_email, contact['name'])
 
             message_id = send_email(
+                config_type=step['config_type'],
+                config_id=step['config_id'],
                 recipient_email=contact['email'],
                 subject=subject.replace('{{First Name}}', contact.get('name', '')),
                 html_body=body.replace('{{First Name}}', contact.get('name', '')),
@@ -77,7 +79,6 @@ def process_sequence_step(step):
                 references=references
             )
 
-            # CORRECTED: Get the user_id from the step dictionary, not current_user
             user_id_for_log = step.get('user_id')
 
             if message_id:

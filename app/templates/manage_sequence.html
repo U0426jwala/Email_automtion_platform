@@ -7,8 +7,10 @@
         <div>
             <h1>{{ sequence.name }}</h1>
             <p style="margin: 0; color: #555;">
-                <strong>List:</strong> {{ sequence.list_name }} | <strong>Status:</strong> <span class="status-badge status-{{ sequence.status|lower }}">{{ sequence.status }}</span>
-            </p>
+                <strong>List:</strong> {{ sequence.list_name }} | 
+                <strong>Status:</strong> <span class="status-badge status-{{ sequence.status|lower }}">{{ sequence.status }}</span> |
+                <strong>Sending Via:</strong> {{ sending_config_details }}
+                </p>
         </div>
         <div style="display: flex; gap: 1rem;">
             <a href="{{ url_for('sequence.add_sequence_step_route', sequence_id=sequence.id) }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add New Step</a>

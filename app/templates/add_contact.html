@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}
+    Add Contact to {{ list_details.list_name }}
+{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-container {
+        background-color: #fff;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        max-width: 600px;
+        margin: 2rem auto;
+        border: 1px solid #e9ecef;
+    }
+    .form-container h1 {
+        font-size: 1.75rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: #495057;
+    }
+    .form-group input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        box-sizing: border-box;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    .btn {
+        border: none; padding: 0.75rem 1.5rem; border-radius: 5px;
+        font-size: 1rem; font-weight: 500; cursor: pointer;
+        text-decoration: none; display: inline-flex; align-items: center;
+    }
+    .btn-primary { background-color: #3498db; color: white; }
+    .btn-primary:hover { background-color: #2980b9; }
+    .btn-secondary { background-color: #95a5a6; color: white; }
+    .btn-secondary:hover { background-color: #7f8c8d; }
+    .breadcrumb { margin-bottom: 1.5rem; }
+    .breadcrumb a { color: #3498db; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb span { color: #7f8c8d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+    <a href="{{ url_for('contact.lists') }}">Contact Lists</a> / 
+    <a href="{{ url_for('contact.view_contacts', list_id=list_id) }}">{{ list_details.list_name }}</a> /
+    <span>Add Contact</span>
+</div>
+
+<div class="form-container">
+    <h1>Add a New Contact</h1>
+    <p style="color: #7f8c8d; margin-top: -1rem; margin-bottom: 1.5rem;">
+        Add a single contact to the list: <strong>{{ list_details.list_name }}</strong>
+    </p>
+
+    <form action="{{ url_for('contact.add_contact', list_id=list_id) }}" method="POST">
+        <div class="form-group">
+            <label for="name">Name <span style="color: #e74c3c;">*</span></label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email <span style="color: #e74c3c;">*</span></label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+            <label for="location">Location</label>
+            <input type="text" id="location" name="location">
+        </div>
+        <div class="form-group">
+            <label for="company_name">Company Name</label>
+            <input type="text" id="company_name" name="company_name">
+        </div>
+
+        <div class="form-actions">
+            <a href="{{ url_for('contact.view_contacts', list_id=list_id) }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save Contact</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

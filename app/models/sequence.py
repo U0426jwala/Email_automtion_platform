@@ -1,3 +1,5 @@
+# app/models/sequence.py
+
 import mysql.connector
 from mysql.connector import Error
 from app.config import Config
@@ -23,14 +25,18 @@ def get_db_connection():
         logger.error(f"Error establishing database connection: {e}")
         return None
 
-def create_sequence(name, list_id, created_by, status='active'):
-    """Creates a new sequence in the database."""
+# --- MODIFICATION START ---
+def create_sequence(name, list_id, created_by, config_type, config_id, status='active'):
+    """Creates a new sequence, including its sending configuration."""
     connection = get_db_connection()
     if not connection: return None
     try:
         with connection.cursor() as cursor:
-            query = "INSERT INTO sequences (name, list_id, created_by, status) VALUES (%s, %s, %s, %s)"
-            cursor.execute(query, (name, list_id, created_by, status))
+            query = """
+            INSERT INTO sequences (name, list_id, created_by, status, config_type, config_id) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (name, list_id, created_by, status, config_type, config_id))
             connection.commit()
             return cursor.lastrowid
     except Error as e:
@@ -39,6 +45,7 @@ def create_sequence(name, list_id, created_by, status='active'):
     finally:
         if connection and connection.is_connected():
             connection.close()
+# --- MODIFICATION END ---
 
 def create_sequence_step(sequence_id, step_number, type, campaign_id, schedule_time, is_re_reply, status='scheduled'):
     """Creates a new step for a sequence."""
@@ -63,6 +70,7 @@ def get_sequences():
     if not connection: return []
     try:
         with connection.cursor(dictionary=True) as cursor:
+            # We also fetch config details to display in the UI
             query = """
                 SELECT s.*, l.list_name, COUNT(ss.id) as step_count 
                 FROM sequences s 
@@ -81,7 +89,7 @@ def get_sequences():
             connection.close()
 
 def get_sequence(sequence_id):
-    """Fetches a single sequence's details."""
+    """Fetches a single sequence's details, including its sending config."""
     connection = get_db_connection()
     if not connection: return None
     try:
@@ -159,16 +167,16 @@ def update_sequence_step(step_id, step_number, type, campaign_id, schedule_time,
         if connection and connection.is_connected():
             connection.close()
 
+# --- MODIFICATION START ---
 def get_due_steps():
     """
-    Fetches all sequence steps that are scheduled to be sent now or in the past.
-    It joins with other tables to get all necessary information for sending.
+    Fetches all due steps and now includes the sending configuration (config_type, config_id)
+    from the parent sequence.
     """
     connection = get_db_connection()
     if not connection: return []
     try:
         with connection.cursor(dictionary=True) as cursor:
-            # CORRECTED: This query now fetches the user_id (as created_by)
             query = """
                 SELECT 
                     ss.id, 
@@ -177,8 +185,11 @@ def get_due_steps():
                     ss.is_re_reply,
                     s.list_id,
                     s.created_by AS user_id, 
+                    s.config_type,
+                    s.config_id,
                     c.subject AS campaign_subject,
-                    c.body AS campaign_body
+                    c.body AS campaign_body,
+                    c.id AS campaign_id
                 FROM sequence_steps ss
                 JOIN sequences s ON ss.sequence_id = s.id
                 JOIN campaigns c ON ss.campaign_id = c.id
@@ -192,6 +203,7 @@ def get_due_steps():
     finally:
         if connection and connection.is_connected():
             connection.close()
+# --- MODIFICATION END ---
             
 def update_step_status(step_id, status):
     """Updates the status of a single sequence step."""
