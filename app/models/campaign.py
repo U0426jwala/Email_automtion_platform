@@ -1,156 +1,86 @@
+# app/models/campaign.py (Debugging Version)
+
 import mysql.connector
 from mysql.connector import Error
+from app.database import get_db_connection
 from app.config import Config
-import logging
-from datetime import datetime
 import os
+import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def get_db_connection():
-    """Establishes and returns a database connection."""
-    try:
-        db_password = os.getenv('MYSQL_PASSWORD')
-        return mysql.connector.connect(
-            host=Config.MYSQL_HOST,
-            user=Config.MYSQL_USER,
-            password=db_password,
-            database=Config.MYSQL_DB,
-            connection_timeout=10
-        )
-    except Error as e:
-        logger.error(f"Error establishing database connection: {e}")
-        return None
-        
-def create_campaign(name, subject, body, created_by, status='draft'):
+
+
+def create_campaign(name, subject, body, created_by):
     """Creates a new campaign in the database."""
-    connection = get_db_connection()
-    if not connection: return None
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        with connection.cursor() as cursor:
-            query = """
-            INSERT INTO campaigns (name, subject, body, status, created_by)
-            VALUES (%s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (name, subject, body, status, created_by))
-            connection.commit()
-            campaign_id = cursor.lastrowid
-        logger.info(f"Campaign '{name}' created with ID: {campaign_id}")
-        return campaign_id
+        with conn.cursor() as cursor:
+            query = "INSERT INTO campaigns (name, subject, body, created_by) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query, (name, subject, body, created_by))
+            conn.commit()
+            return True
     except Error as e:
-        logger.error(f"Error creating campaign '{name}': {e}")
-        return None
+        logger.error(f"Error creating campaign: {e}")
+        conn.rollback()
+        return False
     finally:
-        if connection.is_connected():
-            connection.close()
+        if conn and conn.is_connected():
+            conn.close()
 
 def get_campaigns():
-    """Fetches all campaigns from the database."""
-    connection = get_db_connection()
-    if not connection: return []
+    """Retrieves all campaigns from the database."""
+    conn = get_db_connection()
+    if not conn:
+        return []
     try:
-        with connection.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, name, subject, body, status, created_by, created_at FROM campaigns ORDER BY created_at DESC")
+        with conn.cursor(dictionary=True) as cursor:
+            query = "SELECT id, name, subject, body, created_at FROM campaigns ORDER BY created_at DESC"
+            cursor.execute(query)
             campaigns = cursor.fetchall()
-        logger.info(f"Fetched {len(campaigns)} campaigns")
-        return campaigns
+            return campaigns
     except Error as e:
         logger.error(f"Error fetching campaigns: {e}")
         return []
     finally:
-        if connection.is_connected():
-            connection.close()
+        if conn and conn.is_connected():
+            conn.close()
 
 def get_campaign(campaign_id):
-    """Fetches a single campaign by ID."""
-    connection = get_db_connection()
-    if not connection: return None
+    """Retrieves a single campaign by its ID."""
+    conn = get_db_connection()
+    if not conn:
+        return None
     try:
-        with connection.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT id, name, subject, body, status, created_by, created_at FROM campaigns WHERE id = %s", (campaign_id,))
+        with conn.cursor(dictionary=True) as cursor:
+            query = "SELECT id, name, subject, body FROM campaigns WHERE id = %s"
+            cursor.execute(query, (campaign_id,))
             campaign = cursor.fetchone()
-        logger.info(f"Fetched campaign with ID: {campaign_id}")
-        return campaign
+            return campaign
     except Error as e:
-        logger.error(f"Error fetching campaign {campaign_id}: {e}")
+        logger.error(f"Error fetching campaign by ID: {e}")
         return None
     finally:
-        if connection.is_connected():
-            connection.close()
+        if conn and conn.is_connected():
+            conn.close()
 
-# NEW: Function to delete a campaign from the database
 def delete_campaign(campaign_id):
-    """Deletes a campaign from the database by its ID."""
-    connection = get_db_connection()
-    if not connection: return False
+    """Deletes a campaign from the database."""
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        with connection.cursor() as cursor:
-            # You may also want to delete related records (tags, logs) here in a transaction
-            cursor.execute("DELETE FROM campaigns WHERE id = %s", (campaign_id,))
-            connection.commit()
-        logger.info(f"Successfully deleted campaign with ID: {campaign_id}")
-        return True
+        with conn.cursor() as cursor:
+            query = "DELETE FROM campaigns WHERE id = %s"
+            cursor.execute(query, (campaign_id,))
+            conn.commit()
+            return True
     except Error as e:
-        logger.error(f"Error deleting campaign ID {campaign_id}: {e}")
+        logger.error(f"Error deleting campaign: {e}")
         return False
     finally:
-        if connection.is_connected():
-            connection.close()
-
-def get_campaign_tags(campaign_id):
-    """Fetches tags for a specific campaign."""
-    connection = get_db_connection()
-    if not connection: return []
-    try:
-        with connection.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT tag_name FROM campaign_tags WHERE campaign_id = %s", (campaign_id,))
-            tags = [row['tag_name'] for row in cursor.fetchall()]
-        logger.info(f"Fetched {len(tags)} tags can campaign ID {campaign_id}")
-        return tags
-    except Error as e:
-        logger.error(f"Error fetching tags for campaign ID {campaign_id}: {e}")
-        return []
-    finally:
-        if connection.is_connected():
-            connection.close()
-
-def add_campaign_tags(campaign_id, tags):
-    """Adds tags to a campaign."""
-    connection = get_db_connection()
-    if not connection: return False
-    try:
-        with connection.cursor() as cursor:
-            for tag in tags:
-                cursor.execute("INSERT INTO campaign_tags (campaign_id, tag_name) VALUES (%s, %s)", (campaign_id, tag))
-            connection.commit()
-        logger.info(f"Tags added to campaign {campaign_id}")
-        return True
-    except Error as e:
-        logger.error(f"Error adding tags to campaign {campaign_id}: {e}")
-        return False
-    finally:
-        if connection.is_connected():
-            connection.close()
-
-def create_campaign_schedule(campaign_id, scheduled_time, timezone='UTC'):
-    """Schedules a campaign for sending."""
-    connection = get_db_connection()
-    if not connection: return None
-    try:
-        with connection.cursor() as cursor:
-            query = """
-            INSERT INTO campaign_schedules (campaign_id, scheduled_time, timezone)
-            VALUES (%s, %s, %s)
-            """
-            cursor.execute(query, (campaign_id, scheduled_time, timezone))
-            connection.commit()
-            schedule_id = cursor.lastrowid
-        logger.info(f"Campaign {campaign_id} scheduled for {scheduled_time} with ID: {schedule_id}")
-        return schedule_id
-    except Error as e:
-        logger.error(f"Error scheduling campaign {campaign_id}: {e}")
-        return None
-    finally:
-        if connection.is_connected():
-            connection.close()
+        if conn and conn.is_connected():
+            conn.close()

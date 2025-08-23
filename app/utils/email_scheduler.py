@@ -1,107 +1,135 @@
 # app/utils/email_scheduler.py
 
 import logging
-from app.models.sequence import get_db_connection, get_last_sent_email_for_contact
+from datetime import timedelta
+from app.celery_app import celery
+from app.models.sequence import get_due_steps, update_step_status, get_last_sent_email_for_contact
 from app.models.contact import get_contacts_for_list, get_bounced_emails, get_replied_emails
+from app.models.smtp_config import get_smtp_config_by_id
 from app.models.log import SentEmail
-from app.utils.email_sender import send_email
-import os
+from .email_sender import send_email
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def build_reply_body(new_body_template, prev_email, contact_name):
-    new_body = new_body_template.replace('{{First Name}}', contact_name)
-    prev_body = prev_email.get('campaign_body', '')
-    prev_sent_at = prev_email.get('sent_at')
-    prev_body_personalized = prev_body.replace('{{First Name}}', contact_name)
-    sent_date_str = "an earlier date"
-    if prev_sent_at:
-        sent_date_str = prev_sent_at.strftime("%a, %b %d, %Y at %I:%M %p")
-    sender_email = os.getenv('SENDER_EMAIL', 'you')
+@celery.on_after_configure.connect
+def setup_periodic_tasks(sender, **kwargs):
+    sender.add_periodic_task(60.0, process_due_steps.s(), name='check for due emails every 60s')
 
-    return f"""
-    <div style="font-family: sans-serif; font-size: 1rem;">{new_body}</div>
-    <br>
-    <div style="color: #5e5e5e;">
-        On {sent_date_str}, {sender_email} wrote:
-        <blockquote style="margin: 0 0 0 .8ex; border-left: 1px #ccc solid; padding-left: 1ex;">
-            {prev_body_personalized}
-        </blockquote>
-    </div>
-    """
+@celery.task
+def process_due_steps():
+    logger.info("Scheduler task started: Fetching due email steps...")
+    due_steps = get_due_steps()
+    if not due_steps:
+        logger.info("No due steps found.")
+        return
 
-# --- MODIFICATION: Changed the function name back to what scheduler.py expects ---
-def process_sequence_step(step):
-    """Processes a single due step, now using the specified sending configuration."""
-    logger.info(f"Processing Step ID: {step['id']} for Sequence ID: {step['sequence_id']}")
-    
-    try:
-        all_contacts = get_contacts_for_list(step['list_id'])
-        if not all_contacts:
-            logger.warning(f"No contacts found for list ID {step['list_id']}. Skipping step.")
-            return
+    bounced_emails = get_bounced_emails()
+    replied_emails = get_replied_emails()
 
-        bounced_emails = get_bounced_emails()
-        replied_emails = get_replied_emails()
+    for step in due_steps:
+        logger.info(f"Processing step ID {step['id']} for sequence {step['sequence_id']}")
+        
+        update_step_status(step['id'], 'processing')
 
-        valid_contacts = [
-            c for c in all_contacts 
-            if c['email'] not in bounced_emails and c['email'] not in replied_emails
-        ]
+        smtp_config = get_smtp_config_by_id(step['config_id'])
+        if not smtp_config:
+            logger.error(f"SMTP config not found for step {step['id']}. Skipping.")
+            update_step_status(step['id'], 'failed')
+            continue
 
-        logger.info(f"Found {len(valid_contacts)} valid contacts to email for Step ID: {step['id']}.")
+        contacts = get_contacts_for_list(step['list_id'])
+        for contact in contacts:
+            if contact['email'] in bounced_emails or contact['email'] in replied_emails:
+                logger.info(f"Skipping {contact['email']} for sequence {step['sequence_id']} (bounced/replied).")
+                continue
 
-        for contact in valid_contacts:
-            subject = step['campaign_subject']
-            body = step['campaign_body']
-            in_reply_to = None
-            references = None
-
-            if step.get('is_re_reply'):
-                previous_email = get_last_sent_email_for_contact(step['sequence_id'], contact['id'])
-                if previous_email:
-                    in_reply_to = previous_email.get('message_id')
-                    references = previous_email.get('message_id')
-                    if not previous_email.get('subject', '').lower().startswith('re:'):
-                         subject = f"Re: {previous_email.get('subject', '')}"
-                    else:
-                         subject = previous_email.get('subject', '')
-                    body = build_reply_body(body, previous_email, contact['name'])
-
-            message_id = send_email(
-                config_type=step['config_type'],
-                config_id=step['config_id'],
-                recipient_email=contact['email'],
-                subject=subject.replace('{{First Name}}', contact.get('name', '')),
-                html_body=body.replace('{{First Name}}', contact.get('name', '')),
-                in_reply_to=in_reply_to,
-                references=references
-            )
-
-            user_id_for_log = step.get('user_id')
-
-            if message_id:
-                SentEmail.log_email(
-                    user_id=user_id_for_log,
-                    contact_id=contact['id'],
-                    subject=subject,
-                    status='sent',
-                    campaign_id=step.get('campaign_id'),
-                    sequence_id=step.get('sequence_id'),
-                    step_id=step.get('id'),
-                    message_id=message_id
-                )
-            else:
-                SentEmail.log_email(
-                    user_id=user_id_for_log,
-                    contact_id=contact['id'],
-                    subject=subject,
-                    status='failed',
-                    campaign_id=step.get('campaign_id'),
-                    sequence_id=step.get('sequence_id'),
-                    step_id=step.get('id')
+            try:
+                # --- MODIFICATION START: Threading Logic ---
+                in_reply_to = None
+                references = None
+                
+                # Default to the current campaign's subject
+                personalized_subject = step['campaign_subject'].format(
+                    name=contact['name'],
+                    company_name=contact['company_name'],
+                    location=contact['location']
                 )
 
-    except Exception as e:
-        logger.error(f"An unexpected error occurred in process_sequence_step for step ID {step['id']}: {e}", exc_info=True)
+                # Default to the current campaign's body
+                personalized_body = step['campaign_body'].format(
+                    name=contact['name'],
+                    company_name=contact['company_name'],
+                    location=contact['location']
+                )
+                
+                # Rebuild the entire email body, including the reply chain
+                if step['is_re_reply']:
+                    last_email = get_last_sent_email_for_contact(step['sequence_id'], contact['id'])
+                    
+                    if last_email:
+                        in_reply_to = last_email['message_id']
+                        last_references = last_email.get('references') or last_email['message_id']
+                        references = f"{last_references} {in_reply_to}"
+
+                        # Add "Re:" to the subject if it's not already there
+                        if not personalized_subject.lower().startswith('re:'):
+                            personalized_subject = f"Re: {personalized_subject}"
+
+                        # Build the quoted HTML block
+                        original_sent_at = last_email['sent_at'].strftime('%d %b %Y %H:%M') if last_email.get('sent_at') else 'N/A'
+                        from_name = smtp_config.get('from_name', smtp_config['from_email'])
+                        to_name = contact.get('name', contact.get('email', ''))
+
+                        quoted_html = f"""
+                            <br>
+                            <div style="font-size: 10pt; font-family: Tahoma, 'sans-serif';">
+                                <hr style="display:inline-block;width:98%;border-style:solid;border-width:1px;border-color:#E1E1E1;">
+                                <b>From:</b> {from_name}<br>
+                                <b>Sent:</b> {original_sent_at}<br>
+                                <b>To:</b> {to_name} &lt;{contact['email']}&gt;<br>
+                                <b>Subject:</b> {last_email['subject']}<br>
+                            </div>
+                            <br>
+                            <div style="background-color:#EFEFEF; padding: 10px; border: 1px solid #CCCCCC;">
+                                {last_email['campaign_body']}
+                            </div>
+                        """
+                        # Combine the new content with the quoted content
+                        personalized_body += quoted_html
+                
+                # Pass the headers and the new, combined HTML body to the sender
+                message_id, final_references = send_email(smtp_config, contact['email'], personalized_subject, personalized_body, in_reply_to, references)
+                
+                if message_id:
+                    SentEmail.log_email(
+                        user_id=step['user_id'], 
+                        contact_id=contact['id'], 
+                        subject=personalized_subject, 
+                        status='sent', 
+                        campaign_id=step['campaign_id'], 
+                        message_id=message_id, 
+                        references=final_references,
+                        sequence_id=step['sequence_id'],
+                        step_id=step['id']
+                    )
+                    logger.info(f"Email sent to {contact['email']} for step {step['id']}")
+                else:
+                    raise Exception("send_email function failed to return a message_id")
+
+            except Exception as e:
+                logger.error(f"Failed to send email to {contact['email']} for step {step['id']}: {e}")
+                SentEmail.log_email(
+                    user_id=step['user_id'], 
+                    contact_id=contact['id'], 
+                    subject=personalized_subject, 
+                    status='failed', 
+                    campaign_id=step['campaign_id'],
+                    sequence_id=step['sequence_id'],
+                    step_id=step['id']
+                )
+                # --- MODIFICATION END ---
+        
+        # --- FIX: Ensure this is correctly outside the inner 'for' loop but inside the outer 'for' loop.
+        update_step_status(step['id'], 'sent')
+        logger.info(f"Finished processing step {step['id']}.")

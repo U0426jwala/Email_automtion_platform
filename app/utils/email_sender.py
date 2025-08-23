@@ -4,22 +4,21 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import make_msgid # <-- CHANGE: Import make_msgid
 
-# Simplified imports - no more boto3 or SES models
 from app.models.smtp_config import get_smtp_config_by_id
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def send_email(config_id, recipient_email, subject, html_body, in_reply_to=None, references=None):
+def send_email(config, recipient_email, subject, html_body, in_reply_to=None, references=None):
     """
     Sends an email using a specified SMTP configuration.
+    Generates and returns the Message-ID.
     """
-    # Get the chosen SMTP configuration from the database
-    config = get_smtp_config_by_id(config_id)
     if not config:
-        logger.error(f"SMTP configuration with ID {config_id} not found.")
-        return None
+        logger.error(f"SMTP configuration was not provided.")
+        return None, None # <-- CHANGE: Return two values
 
     host = config['host']
     port = config['port']
@@ -36,10 +35,17 @@ def send_email(config_id, recipient_email, subject, html_body, in_reply_to=None,
     else:
         msg['From'] = from_email
     msg['To'] = recipient_email
+    
+    # --- MODIFICATION START: Header Generation ---
+    # Generate a unique Message-ID for this new email
+    message_id = make_msgid()
+    msg['Message-ID'] = message_id
+    
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
     if references:
         msg['References'] = references
+    # --- MODIFICATION END ---
     
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
@@ -52,8 +58,8 @@ def send_email(config_id, recipient_email, subject, html_body, in_reply_to=None,
         server.sendmail(from_email, recipient_email, msg.as_string())
         server.quit()
         logger.info(f"Email sent via SMTP to {recipient_email} using {host}")
-        # In SMTP, there's no standard message ID, so we can return a success indicator
-        return "smtp-sent-successfully" 
+        # --- CHANGE: Return the generated Message-ID and the References used ---
+        return message_id, msg['References']
     except Exception as e:
         logger.error(f"Failed to send email via SMTP to {recipient_email}: {e}")
-        return None
+        return None, None

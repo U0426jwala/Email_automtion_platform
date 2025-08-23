@@ -1,89 +1,85 @@
+# app/models/user.py (Corrected)
+
 import mysql.connector
 from mysql.connector import Error
-from app.config import Config
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
+from werkzeug.security import generate_password_hash
+from app.database import get_db_connection  # We are using the central connection
 import logging
-import os # <-- IMPORT ADDED
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# --- CORRECTED DATABASE CONNECTION ---
-def get_db_connection():
-    """Establishes and returns a database connection."""
-    try:
-        db_password = os.getenv('MYSQL_PASSWORD')
-        return mysql.connector.connect(
-            host=Config.MYSQL_HOST,
-            user=Config.MYSQL_USER,
-            password=db_password,
-            database=Config.MYSQL_DB,
-            connection_timeout=10
-        )
-    except Error as e:
-        logger.error(f"Error establishing database connection: {e}")
-        return None
-
-# --- NOTE: All direct connection calls below are replaced by get_db_connection() ---
 class User(UserMixin):
     def __init__(self, id, username, password_hash):
         self.id = id
         self.username = username
         self.password_hash = password_hash
 
+    # The old get_db_connection staticmethod is deleted, which is correct.
+
     @staticmethod
     def get(user_id):
-        connection = get_db_connection()
-        if not connection: return None
+        """Retrieve a user by their ID."""
+        # THE FIX: Changed User.get_db_connection() to just get_db_connection()
+        conn = get_db_connection()
+        if not conn:
+            return None
         try:
-            logger.info(f"Connected to MySQL for user ID {user_id}")
-            with connection.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT id, username, password FROM users WHERE id = %s", (user_id,))
-                user = cursor.fetchone()
-                if user:
-                    return User(user['id'], user['username'], user['password'])
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, username, password_hash FROM users WHERE id = %s", (user_id,))
+            user_data = cursor.fetchone()
+            if user_data:
+                return User(id=user_data[0], username=user_data[1], password_hash=user_data[2])
             return None
         except Error as e:
             logger.error(f"Error fetching user by ID: {e}")
             return None
         finally:
-            if connection.is_connected():
-                connection.close()
+            if conn and conn.is_connected():
+                cursor.close()
+                conn.close()
 
     @staticmethod
     def get_by_username(username):
-        connection = get_db_connection()
-        if not connection: return None
+        """Retrieve a user by their username."""
+        # THE FIX: Changed User.get_db_connection() to just get_db_connection()
+        conn = get_db_connection()
+        if not conn:
+            return None
         try:
-            logger.info(f"Connected to MySQL for user {username}")
-            with connection.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT id, username, password FROM users WHERE username = %s", (username,))
-                user = cursor.fetchone()
-                if user:
-                    return User(user['id'], user['username'], user['password'])
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, username, password_hash FROM users WHERE username = %s", (username,))
+            user_data = cursor.fetchone()
+            if user_data:
+                return User(id=user_data[0], username=user_data[1], password_hash=user_data[2])
             return None
         except Error as e:
             logger.error(f"Error fetching user by username: {e}")
             return None
         finally:
-            if connection.is_connected():
-                connection.close()
+            if conn and conn.is_connected():
+                cursor.close()
+                conn.close()
 
     @staticmethod
     def create(username, password):
-        connection = get_db_connection()
-        if not connection: return False
+        """Create a new user with a hashed password."""
+        password_hash = generate_password_hash(password)
+        # THE FIX: Changed User.get_db_connection() to just get_db_connection()
+        conn = get_db_connection()
+        if not conn:
+            return None
         try:
-            with connection.cursor() as cursor:
-                password_hash = generate_password_hash(password)
-                cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password_hash))
-                connection.commit()
-            logger.info(f"User {username} created successfully")
-            return True
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, password_hash))
+            conn.commit()
+            user_id = cursor.lastrowid
+            return User.get(user_id)
         except Error as e:
-            logger.error(f"Error creating user {username}: {e}")
-            return False
+            logger.error(f"Error creating user: {e}")
+            return None
         finally:
-            if connection.is_connected():
-                connection.close()
+            if conn and conn.is_connected():
+                cursor.close()
+                conn.close()

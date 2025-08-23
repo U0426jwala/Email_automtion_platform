@@ -7,7 +7,7 @@
         <h1>Email Sequences</h1>
         <a href="{{ url_for('sequence.create_sequence_route') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Create New Sequence</a>
     </div>
-    
+
     {% if not sequences %}
         <div class="card" style="text-align: center;">
             <h2 style="color: #95a5a6; font-weight: 300;">No Sequences Yet</h2>
@@ -22,7 +22,7 @@
                         <span class="status-badge status-{{ sequence.status|lower }}">{{ sequence.status }}</span>
                     </div>
                     <p style="margin: 0.5rem 0; color: #555;"><strong>List:</strong> {{ sequence.list_name }}</p>
-                    <p style="margin: 0.5rem 0; color: #555;"><strong>Steps:</strong> {{ sequence.step_count | default(0) }}</p>
+                    <p style="margin: 0.5rem 0; color: #555;"><strong>Steps:</strong> {{ sequence.total_steps | default(0) }}</p>
                     <p style="font-size: 0.8rem; color: #95a5a6;">Created: {{ sequence.created_at.strftime('%b %d, %Y') if sequence.created_at else 'N/A' }}</p>
                     <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 1.5rem 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">

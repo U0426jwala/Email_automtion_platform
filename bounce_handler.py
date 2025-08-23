@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 import os
 import time
 import json
@@ -5,10 +9,6 @@ import logging
 import boto3
 import mysql.connector
 from mysql.connector import Error
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 # --- Logging Configuration ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
