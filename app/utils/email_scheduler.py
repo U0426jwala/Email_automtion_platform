@@ -1,6 +1,7 @@
 import logging
 import time
 from datetime import datetime
+import re # Using the regex module
 from app.celery_app import celery
 from app.models.sequence import get_due_steps_for_utc_time, update_step_status, get_last_sent_email_for_contact
 from app.models.contact import get_contacts_for_list, get_bounced_emails, get_replied_emails
@@ -11,15 +12,16 @@ from .email_sender import send_email
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- UPDATED HELPER FUNCTION ---
+# --- FINAL, MOST ROBUST HELPER FUNCTION ---
 def _personalize_content(content, contact):
     """
-    Replaces {{placeholders}} with contact data and converts newlines to <br> tags.
+    Replaces {{placeholders}} case-insensitively, handles spaces within
+    placeholders, and converts newlines to <br> tags.
     """
     if not content:
         return ""
 
-    # 1. Split the full name into first and last names.
+    # 1. Get and split the full name from the contact dictionary.
     full_name = contact.get('name', '').strip()
     first_name = ""
     last_name = ""
@@ -29,20 +31,30 @@ def _personalize_content(content, contact):
         if len(parts) > 1:
             last_name = parts[1]
 
-    # 2. Use the correct keys ('company_name') from the contact dictionary.
-    company_name = contact.get('company_name', '')
-    email = contact.get('email', '')
+    # 2. Create a dictionary of the available data with simple, lowercase keys.
+    replacements = {
+        'firstname': first_name,
+        'lastname': last_name,
+        'company': contact.get('company_name', ''),
+        'email': contact.get('email', '')
+    }
 
-    # 3. Replace placeholders.
-    content = content.replace('{{firstname}}', first_name)
-    content = content.replace('{{lastname}}', last_name)
-    content = content.replace('{{company}}', company_name)
-    content = content.replace('{{email}}', email)
+    # 3. Use a regular expression to find all {{placeholders}} case-insensitively.
+    def replace_func(match):
+        # Get the captured placeholder (e.g., "First Name")
+        captured_key = match.group(1)
+        # Process it: make it lowercase and remove all spaces (e.g., "first name" -> "firstname")
+        processed_key = captured_key.lower().replace(' ', '')
+        # Look up the clean key in our dictionary
+        return replacements.get(processed_key, match.group(0))
 
+    # This UPDATED regex `[\w\s]+` now matches word characters AND spaces.
+    content = re.sub(r'\{\{([\w\s]+)\}\}', replace_func, content, flags=re.IGNORECASE)
+    
     # 4. Convert plain text newlines to HTML line breaks.
-    content_with_br = content.replace('\n', '<br>') # <-- THE FIX IS HERE
+    content = content.replace('\n', '<br>')
 
-    return content_with_br.strip()
+    return content.strip()
 # --- End of function ---
 
 

@@ -31,18 +31,32 @@ def create_sequence(name, list_id, created_by, config_type, config_id, status='a
             cursor.close()
             conn.close()
 
-def create_sequence_step(sequence_id, step_number, step_type, schedule_time, is_re_reply, campaign_id=None, reply_body=None):
+# --- THIS FUNCTION HAS BEEN FIXED ---
+def create_sequence_step(sequence_id, step_number, schedule_time, reply_body, is_re_reply, campaign_id=None):
     """Creates a step within a sequence."""
     conn = get_db_connection()
     if not conn:
         return False
+
+    # FIX 1: Determine the step_type based on the step number.
+    step_type = 'email' if step_number == 1 else 'reply'
+
     try:
+        # FIX 2: Validate that an initial step has a campaign ID.
+        if step_type == 'email' and campaign_id is None:
+            logger.error(f"Cannot create email step for sequence {sequence_id} without a campaign_id.")
+            return False
+            
         cursor = conn.cursor()
         query = """
             INSERT INTO sequence_steps (sequence_id, step_number, step_type, campaign_id, reply_body, schedule_time, is_re_reply, status)
             VALUES (%s, %s, %s, %s, %s, %s, %s, 'scheduled')
         """
-        cursor.execute(query, (sequence_id, step_number, step_type, campaign_id, reply_body, schedule_time, is_re_reply))
+        
+        # FIX 3: Pass parameters to the database in the correct order.
+        params = (sequence_id, step_number, step_type, campaign_id, reply_body, schedule_time, is_re_reply)
+        cursor.execute(query, params)
+        
         conn.commit()
         return True
     except Error as e:
@@ -222,7 +236,7 @@ def get_sequence_step(step_id):
             cursor.close()
             conn.close()
 
-def update_sequence_step(step_id, step_number, schedule_time, is_re_reply, campaign_id=None, reply_body=None):
+def update_sequence_step(step_id, step_number, campaign_id, reply_body, schedule_time, is_re_reply):
     """Updates the details of a sequence step."""
     conn = get_db_connection()
     if not conn:
@@ -234,7 +248,14 @@ def update_sequence_step(step_id, step_number, schedule_time, is_re_reply, campa
             SET step_number=%s, campaign_id=%s, reply_body=%s, schedule_time=%s, is_re_reply=%s
             WHERE id=%s
         """
-        campaign_id_int = int(campaign_id) if campaign_id else None
+        campaign_id_int = None
+        if campaign_id:
+            try:
+                campaign_id_int = int(campaign_id)
+            except (ValueError, TypeError):
+                logger.error(f"Invalid campaign_id '{campaign_id}' passed for step {step_id}. It must be a number.")
+                return False
+
         cursor.execute(query, (step_number, campaign_id_int, reply_body, schedule_time, is_re_reply, step_id))
         conn.commit()
         return True

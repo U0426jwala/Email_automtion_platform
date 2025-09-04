@@ -49,14 +49,16 @@ def create_sequence_route():
                     step_data = steps_data[step_num_str]
                     naive_schedule_time = datetime.fromisoformat(step_data['schedule_time'])
                     utc_schedule_time = convert_to_utc(naive_schedule_time)
+                    
+                    # --- FIXED FUNCTION CALL ---
+                    # Removed incorrect 'step_type' argument and used keywords for clarity.
                     create_sequence_step(
                         sequence_id=sequence_id, 
                         step_number=int(step_num_str), 
-                        step_type='mailer',
                         schedule_time=utc_schedule_time,
-                        is_re_reply='is_re_reply' in step_data, # Correctly checks for the toggle
-                        campaign_id=step_data.get('campaign_id'), 
-                        reply_body=step_data.get('reply_body')
+                        reply_body=step_data.get('reply_body'),
+                        is_re_reply='is_re_reply' in step_data,
+                        campaign_id=step_data.get('campaign_id')
                     )
                 flash('Sequence created successfully!', 'success')
                 return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
@@ -78,13 +80,16 @@ def add_sequence_step_route(sequence_id):
     if request.method == 'POST':
         naive_schedule_time = datetime.fromisoformat(request.form.get('schedule_time'))
         utc_schedule_time = convert_to_utc(naive_schedule_time)
+        
+        # --- FIXED FUNCTION CALL ---
+        # Removed incorrect 'mailer' argument and used keywords for clarity.
         create_sequence_step(
-            sequence_id, 
-            next_step_number, 
-            'mailer',
+            sequence_id=sequence_id, 
+            step_number=next_step_number, 
             schedule_time=utc_schedule_time,
-            is_re_reply='is_re_reply' in request.form, # Correctly checks for the toggle
-            reply_body=request.form.get('reply_body')
+            reply_body=request.form.get('reply_body'),
+            is_re_reply='is_re_reply' in request.form,
+            campaign_id=None  # A follow-up step never has a campaign
         )
         flash('New step added!', 'success')
         return redirect(url_for('sequence.manage_sequence', sequence_id=sequence_id))
@@ -103,20 +108,22 @@ def edit_sequence_step_route(step_id):
     if request.method == 'POST':
         naive_schedule_time = datetime.fromisoformat(request.form.get('schedule_time'))
         utc_schedule_time = convert_to_utc(naive_schedule_time)
+        
+        # --- FIXED FUNCTION CALL ---
+        # Reordered arguments to match the function definition and used keywords.
         update_sequence_step(
-            step_id, 
-            step['step_number'], 
-            utc_schedule_time,
-            'is_re_reply' in request.form, # Correctly checks for the toggle
-            request.form.get('campaign_id'), 
-            request.form.get('reply_body')
+            step_id=step_id, 
+            step_number=step['step_number'], 
+            campaign_id=request.form.get('campaign_id'), 
+            reply_body=request.form.get('reply_body'),
+            schedule_time=utc_schedule_time,
+            is_re_reply='is_re_reply' in request.form
         )
         flash('Step updated successfully!', 'success')
         return redirect(url_for('sequence.manage_sequence', sequence_id=step['sequence_id']))
 
     previous_subject = get_previous_step_subject(step['sequence_id'], step['step_number'])
     campaigns = get_campaigns()
-    # Ensure schedule_time is a datetime object before passing to template
     if step and isinstance(step.get('schedule_time'), str):
         step['schedule_time'] = datetime.fromisoformat(step['schedule_time'])
         

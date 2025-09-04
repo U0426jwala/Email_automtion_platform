@@ -84,3 +84,25 @@ def delete_campaign(campaign_id):
     finally:
         if conn and conn.is_connected():
             conn.close()
+
+# File: app/models/campaign.py
+
+# ... (add this function to the file) ...
+def get_all_campaigns(user_id):
+    """Retrieves all campaigns created by a specific user."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        query = "SELECT id, campaign_name FROM campaigns WHERE created_by = %s ORDER BY created_at DESC"
+        cursor.execute(query, (user_id,))
+        campaigns = cursor.fetchall()
+        return campaigns
+    except Error as e:
+        logger.error(f"Error fetching all campaigns: {e}")
+        return []
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
