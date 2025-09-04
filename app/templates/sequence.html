@@ -23,7 +23,7 @@
                     </div>
                     <p style="margin: 0.5rem 0; color: #555;"><strong>List:</strong> {{ sequence.list_name }}</p>
                     <p style="margin: 0.5rem 0; color: #555;"><strong>Steps:</strong> {{ sequence.total_steps | default(0) }}</p>
-                    <p style="font-size: 0.8rem; color: #95a5a6;">Created: {{ sequence.created_at.strftime('%b %d, %Y') if sequence.created_at else 'N/A' }}</p>
+                    <p style="font-size: 0.8rem; color: #95a5a6;">Created: {{ sequence.created_at|datetime_ist(format='%b %d, %Y') if sequence.created_at else 'N/A' }}</p>
                     <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 1.5rem 0;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                          <a href="{{ url_for('sequence.manage_sequence', sequence_id=sequence.id) }}" class="btn btn-primary">Manage Steps</a>

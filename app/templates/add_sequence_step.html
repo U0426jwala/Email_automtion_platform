@@ -4,60 +4,34 @@
 
 {% block content %}
 <style>
-    /* --- ADDED: CSS for the toggle switch --- */
-    .toggle-container {
+    /* Styles for the email editor */
+    .email-reply-editor { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-top: 1rem; background-color: #fff; }
+    .email-reply-editor textarea { border: none; outline: none; resize: vertical; width: 100%; min-height: 150px; padding: 0; font-family: inherit; font-size: 1rem; }
+    .quoted-reply-header { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; font-size: 0.9rem; color: #666; }
+    .quoted-reply-header strong { font-weight: 600; color: #333; }
+
+    /* --- Toggle Switch CSS --- */
+    .toggle-container { display: flex; align-items: center; gap: 15px; margin-top: 1.5rem; background-color: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #dee2e6; }
+    .toggle-label { margin-bottom: 0; font-weight: 500; cursor: pointer; }
+    .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
+    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #007bff; }
+    input:checked + .slider:before { transform: translateX(22px); }
+    
+    /* --- CSS for Placeholders --- */
+    .placeholder-buttons {
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
         display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 15px;
-        margin-top: 1rem;
-        padding: 10px;
-        border-radius: 8px;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
     }
-    .toggle-label {
-        margin-bottom: 0;
-        font-weight: 500;
-        cursor: pointer;
-    }
-    .switch {
-        position: relative;
-        display: inline-block;
-        width: 50px;
-        height: 28px;
-    }
-    .switch input { 
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-    .slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #ccc;
-        transition: .4s;
-        border-radius: 28px;
-    }
-    .slider:before {
-        position: absolute;
-        content: "";
-        height: 20px;
-        width: 20px;
-        left: 4px;
-        bottom: 4px;
-        background-color: white;
-        transition: .4s;
-        border-radius: 50%;
-    }
-    input:checked + .slider {
-        background-color: #007bff;
-    }
-    input:checked + .slider:before {
-        transform: translateX(22px);
+    .placeholder-btn {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.6rem;
     }
 </style>
 
@@ -68,30 +42,37 @@
         <hr style="border: none; border-top: 1px solid #ecf0f1; margin: 1.5rem 0;">
 
         <form method="POST">
-            <div>
-                <label for="campaign_id">Mailer Campaign</label>
-                <select id="campaign_id" name="campaign_id" class="form-control" required>
-                    <option value="">-- Select a Campaign --</option>
-                    {% for campaign in campaigns %}
-                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
-                    {% endfor %}
-                </select>
+            <label for="reply_body" style="font-weight: 600;">Reply Content</label>
+            
+            <div class="placeholder-buttons">
+                <small>Insert:</small>
+                <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('reply_body', '{{ '{{' }}firstname}}')">First Name</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('reply_body', '{{ '{{' }}lastname}}')">Last Name</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('reply_body', '{{ '{{' }}company}}')">Company</button>
             </div>
-            <div style="margin-top: 1.5rem;">
+            
+            <div class="email-reply-editor">
+                <textarea id="reply_body" name="reply_body" placeholder="Type your follow-up message here..." required></textarea>
+                <div class="quoted-reply-header">
+                    <p style="margin: 0;"><strong>From:</strong> You</p>
+                    <p style="margin: 0;"><strong>Subject:</strong> Re: {{ previous_subject or 'Previous Email Subject' }}</p>
+                    <hr style="margin: 0.5rem 0; border-color: #e0e0e0;">
+                    <p style="margin: 0;">[Previous email content will appear here]</p>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 1.5rem;">
                 <label for="schedule_time">Schedule Date & Time</label>
                 <input type="datetime-local" id="schedule_time" name="schedule_time" class="form-control" required>
             </div>
-            <input type="hidden" name="type" value="mailer">
-
-            {% if step_number > 1 %}
+            
             <div class="toggle-container">
                 <label class="switch">
-                    <input type="checkbox" name="is_re_reply">
+                    <input type="checkbox" name="is_re_reply" checked>
                     <span class="slider"></span>
                 </label>
                 <label class="toggle-label">Reply to Previous Email (creates a thread)</label>
             </div>
-            {% endif %}
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
                 <a href="{{ url_for('sequence.manage_sequence', sequence_id=sequence.id) }}" class="btn btn-secondary">Cancel</a>
@@ -100,4 +81,21 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function insertPlaceholder(textareaId, placeholder) {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea) return;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const before = text.substring(0, start);
+        const after = text.substring(end, text.length);
+        textarea.value = before + placeholder + after;
+        textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
+        textarea.focus();
+    }
+</script>
 {% endblock %}

@@ -1,65 +1,38 @@
-# app/utils/email_sender.py
-import os
 import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import make_msgid # <-- CHANGE: Import make_msgid
-
-from app.models.smtp_config import get_smtp_config_by_id
+from email.utils import make_msgid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def send_email(config, recipient_email, subject, html_body, in_reply_to=None, references=None):
-    """
-    Sends an email using a specified SMTP configuration.
-    Generates and returns the Message-ID.
-    """
-    if not config:
-        logger.error(f"SMTP configuration was not provided.")
-        return None, None # <-- CHANGE: Return two values
-
-    host = config['host']
-    port = config['port']
-    username = config['username']
-    password = config['password']
-    use_tls = config.get('use_tls', True)
-    from_email = config['from_email']
+    host, port, username, password, from_email = config['host'], config['port'], config['username'], config['password'], config['from_email']
     from_name = config.get('from_name')
 
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
-    if from_name:
-        msg['From'] = f'"{from_name}" <{from_email}>'
-    else:
-        msg['From'] = from_email
+    msg['From'] = f'"{from_name}" <{from_email}>' if from_name else from_email
     msg['To'] = recipient_email
-    
-    # --- MODIFICATION START: Header Generation ---
-    # Generate a unique Message-ID for this new email
-    message_id = make_msgid()
-    msg['Message-ID'] = message_id
-    
+    msg['Message-ID'] = make_msgid(domain='sminetechsol.com')
+
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
     if references:
         msg['References'] = references
-    # --- MODIFICATION END ---
-    
+
     msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     try:
-        server = smtplib.SMTP(host, port, timeout=10)
-        if use_tls:
-            server.starttls()
+        with smtplib.SMTP_SSL(host, port, timeout=10) if config.get('use_ssl') else smtplib.SMTP(host, port, timeout=10) as server:
+            if not config.get('use_ssl') and config.get('use_tls', True):
+                server.starttls()
+            server.login(username, password)
+            server.sendmail(from_email, recipient_email, msg.as_string())
         
-        server.login(username, password)
-        server.sendmail(from_email, recipient_email, msg.as_string())
-        server.quit()
-        logger.info(f"Email sent via SMTP to {recipient_email} using {host}")
-        # --- CHANGE: Return the generated Message-ID and the References used ---
-        return message_id, msg['References']
+        # Return ID, headers, and the full body for logging
+        return msg['Message-ID'], msg.get('References'), html_body
     except Exception as e:
         logger.error(f"Failed to send email via SMTP to {recipient_email}: {e}")
-        return None, None
+        return None, None, None

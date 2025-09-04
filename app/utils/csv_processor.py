@@ -1,60 +1,57 @@
-import pandas as pd
+import csv
 import io
-from app.models.contact import save_contact
+from app.utils.email_validator import check_email
 import logging
 
 logger = logging.getLogger(__name__)
 
-def process_csv(csv_file, list_id):
+def validate_csv_data(csv_file):
     """
-    Processes an uploaded CSV file to extract and save contact information.
-
-    Args:
-        csv_file: The file object from the request.
-        list_id: The ID of the contact list to associate contacts with.
+    Reads a CSV file and validates every row.
+    It does NOT save to the database. It only checks for validity.
 
     Returns:
-        A tuple containing:
-        - saved_contacts_count (int): Number of new contacts saved.
-        - skipped_contacts_count (int): Number of duplicate or failed contacts.
-        - error_contacts (list): A list of error messages, if any.
+        A tuple: (is_valid, data_or_errors)
+        - If all rows are valid: (True, list_of_contact_dictionaries)
+        - If any row is invalid: (False, list_of_error_messages)
     """
-    saved_contacts_count = 0
-    skipped_contacts_count = 0
-    error_contacts = []
-
-    try:
-        # Read the file content into memory and handle potential byte order marks (BOM)
-        content = csv_file.read().decode('utf-8-sig')
-        
-        # Use the pandas library to read the CSV data from the string
-        df = pd.read_csv(io.StringIO(content))
-
-        # Standardize column names to prevent case or spacing issues (e.g., " Name " -> "name")
-        df.columns = [col.strip().lower() for col in df.columns]
-
-        # Check for the essential 'email' and 'name' columns
-        if 'email' not in df.columns or 'name' not in df.columns:
-            raise ValueError("CSV file must contain 'email' and 'name' columns.")
-
-        # Iterate through each row in the CSV data
-        for index, row in df.iterrows():
-            name = row.get('name')
-            email = row.get('email')
-
-            # Handle optional columns safely; they will be None if not found
-            location = row.get('location')
-            company_name = row.get('company_name')
-
-            # The save_contact function returns True on success, False on failure/duplicate
-            if save_contact(list_id, name, email, location, company_name):
-                saved_contacts_count += 1
-            else:
-                skipped_contacts_count += 1
+    contacts_to_save = []
+    errors = []
     
+    # Use a copy of the stream so it can be read again if needed
+    try:
+        file_content = csv_file.stream.read().decode('utf-8-sig')
+        csv_file.stream.seek(0) # Reset stream pointer
+        text_stream = io.StringIO(file_content)
     except Exception as e:
-        logger.error(f"An error occurred during CSV processing: {e}")
-        # Add a user-friendly error message to the list to be displayed
-        error_contacts.append(f"Processing failed: {e}")
+        return False, [f"Error reading file: {e}"]
 
-    return saved_contacts_count, skipped_contacts_count, error_contacts
+    reader = csv.DictReader(text_stream)
+
+    for row_num, row in enumerate(reader, start=2):
+        name = row.get('name', '').strip()
+        email = row.get('email', '').strip()
+
+        # --- VALIDATION LOGIC ---
+        if not name or not email:
+            errors.append(f"Row {row_num}: Name or Email is blank.")
+            continue # Find all errors, don't stop at the first one
+
+        if not check_email(email):
+            errors.append(f"Row {row_num}: Email '{email}' is not a valid format.")
+            continue
+
+        # If valid, add the data to our list
+        contact_data = {
+            'name': name,
+            'email': email,
+            'location': row.get('location', '').strip(),
+            'company_name': row.get('company_name', '').strip()
+        }
+        contacts_to_save.append(contact_data)
+    
+    # If we found any errors during the process, the file is invalid
+    if errors:
+        return False, errors
+
+    return True, contacts_to_save

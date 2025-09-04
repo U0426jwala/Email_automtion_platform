@@ -4,7 +4,14 @@
 
 {% block content %}
 <style>
-    .toggle-container { display: flex; align-items: center; gap: 15px; margin-top: 1rem; padding: 10px; border-radius: 8px; background-color: #f8f9fa; border: 1px solid #dee2e6; }
+    /* (Other styles) */
+    .step-card { border: 1px solid #ddd; padding: 1.5rem; border-radius: var(--border-radius); margin-top: 1.5rem; background-color: #fdfdfd; }
+    .email-reply-editor { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-top: 1rem; background-color: #fff; }
+    .email-reply-editor textarea { border: none; outline: none; resize: vertical; width: 100%; min-height: 150px; padding: 0; font-family: inherit; font-size: 1rem; }
+    .quoted-reply-header { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; font-size: 0.9rem; color: #666; }
+
+    /* --- Toggle Switch CSS --- */
+    .toggle-container { display: flex; align-items: center; gap: 15px; margin-top: 1.5rem; background-color: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #dee2e6; }
     .toggle-label { margin-bottom: 0; font-weight: 500; cursor: pointer; }
     .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
     .switch input { opacity: 0; width: 0; height: 0; }
@@ -12,7 +19,20 @@
     .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
     input:checked + .slider { background-color: #007bff; }
     input:checked + .slider:before { transform: translateX(22px); }
-    .step-card { border: 1px solid #ddd; padding: 1.5rem; border-radius: var(--border-radius); margin-top: 1.5rem; background-color: #fdfdfd; }
+
+    /* --- CSS for Placeholders --- */
+    .placeholder-buttons {
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .placeholder-btn {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.6rem;
+    }
 </style>
 
 <div class="page-header">
@@ -25,18 +45,14 @@
             <label for="sequence_name">Sequence Name</label>
             <input type="text" class="form-control" id="sequence_name" name="sequence_name" required placeholder="e.g., New Client Onboarding">
         </div>
-        
         <div class="form-group">
             <label for="sending_config">Send Using:</label>
             <select name="sending_config" id="sending_config" class="form-control" required>
                 <option value="" disabled selected>-- Select an SMTP service --</option>
-                
                 {% if smtp_configs %}
                     {% for config in smtp_configs %}
                         <option value="{{ config.id }}">SMTP: {{ config.name }} ({{ config.username }})</option>
                     {% endfor %}
-                {% else %}
-                    <option value="" disabled>No SMTP configurations found</option>
                 {% endif %}
             </select>
         </div>
@@ -54,13 +70,13 @@
         <h3 style="margin-top: 2rem;">Sequence Steps</h3>
         <div id="steps-container">
             <div class="step-card" id="step-1">
-                <h4>Step 1</h4>
+                <h4>Step 1: Initial Email</h4>
                 <div class="form-group">
                     <label>Campaign</label>
                     <select name="step[1][campaign_id]" class="form-control" required>
                         <option value="">-- Select Campaign --</option>
                         {% for campaign in campaigns %}
-                        <option value="{{ campaign.id }}">{{ campaign.name }}</option>
+                        <option value="{{ campaign.id }}" data-subject="{{ campaign.subject|e }}">{{ campaign.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -71,7 +87,7 @@
             </div>
         </div>
 
-        <button type="button" class="btn btn-secondary" style="margin-top: 1rem;" onclick="addStep()">+ Add Another Step</button>
+        <button type="button" class="btn btn-secondary" style="margin-top: 1rem;" onclick="addStep()">+ Add Follow-up Step</button>
         <hr style="margin-top: 2rem;">
         <button type="submit" class="btn btn-primary">Create Sequence</button>
     </form>
@@ -82,30 +98,57 @@
 <script>
     let stepCounter = 1;
 
+    function insertPlaceholder(textareaId, placeholder) {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea) return;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const before = text.substring(0, start);
+        const after = text.substring(end, text.length);
+        textarea.value = before + placeholder + after;
+        textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
+        textarea.focus();
+    }
+
     function addStep() {
         stepCounter++;
+        const step1CampaignSelect = document.querySelector('select[name="step[1][campaign_id]"]');
+        const selectedOption = step1CampaignSelect.options[step1CampaignSelect.selectedIndex];
+        const previousSubject = selectedOption.dataset.subject || 'Previous Email Subject';
+
         const container = document.getElementById('steps-container');
         const newStep = document.createElement('div');
         newStep.className = 'step-card';
         newStep.id = `step-${stepCounter}`;
 
-        const campaignOptions = `
-            <option value="">-- Select Campaign --</option>
-            {% for campaign in campaigns %}
-            <option value="{{ campaign.id }}">{{ campaign.name|e }}</option>
-            {% endfor %}
-        `;
+        const textareaId = `reply_body_${stepCounter}`;
 
         newStep.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h4>Step ${stepCounter}</h4>
-                <button type="button" class="btn btn-danger" onclick="removeStep(${stepCounter})">Remove</button>
+                <h4>Step ${stepCounter}: Follow-up</h4>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeStep(${stepCounter})">Remove</button>
             </div>
+            
             <div class="form-group">
-                <label>Campaign</label>
-                <select name="step[${stepCounter}][campaign_id]" class="form-control" required>
-                    ${campaignOptions}
-                </select>
+                <label style="font-weight: 600;">Reply Content</label>
+                
+                <div class="placeholder-buttons">
+                    <small>Insert:</small>
+                    <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('${textareaId}', '{{ '{{' }}firstname}}')">First Name</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('${textareaId}', '{{ '{{' }}lastname}}')">Last Name</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('${textareaId}', '{{ '{{' }}company}}')">Company</button>
+                </div>
+
+                <div class="email-reply-editor">
+                    <textarea id="${textareaId}" name="step[${stepCounter}][reply_body]" placeholder="Type your follow-up message here..." required></textarea>
+                     <div class="quoted-reply-header">
+                        <p style="margin:0;"><strong>From:</strong> You</p>
+                        <p style="margin:0;"><strong>Subject:</strong> Re: ${previousSubject}</p>
+                        <hr style="margin: 0.5rem 0; border-color: #e0e0e0;">
+                        <p style="margin:0;">[Previous email content will appear here]</p>
+                    </div>
+                </div>
             </div>
             <div class="form-group">
                 <label>Schedule Date & Time</label>
@@ -113,7 +156,7 @@
             </div>
             <div class="toggle-container">
                 <label class="switch">
-                    <input type="checkbox" name="step[${stepCounter}][is_re_reply]">
+                    <input type="checkbox" name="step[${stepCounter}][is_re_reply]" checked>
                     <span class="slider"></span>
                 </label>
                 <label class="toggle-label">Reply to Previous Email (creates a thread)</label>

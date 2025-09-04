@@ -80,17 +80,23 @@ def get_contacts_for_list(list_id):
     conn = get_db_connection()
     if not conn:
         return []
+    
+    contacts = []  # Initialize an empty list
     try:
         cursor = conn.cursor(dictionary=True)
         query = "SELECT id, name, email, location, company_name FROM contacts WHERE list_id = %s"
         cursor.execute(query, (list_id,))
-        return cursor.fetchall()
+        contacts = cursor.fetchall() # Fetch all results into the list
     except Error as e:
         logger.error(f"Error fetching contacts for list {list_id}: {e}")
-        return []
     finally:
-        cursor.close()
-        conn.close()
+        # Ensure connection and cursor are closed
+        if 'cursor' in locals() and cursor is not None:
+            cursor.close()
+        if conn and conn.is_connected():
+            conn.close()
+            
+    return contacts
 
 def get_list_by_id(list_id):
     """Retrieves details for a single list by its ID."""

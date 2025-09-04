@@ -1,9 +1,8 @@
-# app/utils/email_scheduler.py
-
 import logging
-from datetime import timedelta
+import time
+from datetime import datetime
 from app.celery_app import celery
-from app.models.sequence import get_due_steps, update_step_status, get_last_sent_email_for_contact
+from app.models.sequence import get_due_steps_for_utc_time, update_step_status, get_last_sent_email_for_contact
 from app.models.contact import get_contacts_for_list, get_bounced_emails, get_replied_emails
 from app.models.smtp_config import get_smtp_config_by_id
 from app.models.log import SentEmail
@@ -12,124 +11,138 @@ from .email_sender import send_email
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- UPDATED HELPER FUNCTION ---
+def _personalize_content(content, contact):
+    """
+    Replaces {{placeholders}} with contact data and converts newlines to <br> tags.
+    """
+    if not content:
+        return ""
+
+    # 1. Split the full name into first and last names.
+    full_name = contact.get('name', '').strip()
+    first_name = ""
+    last_name = ""
+    if full_name:
+        parts = full_name.split(' ', 1)
+        first_name = parts[0]
+        if len(parts) > 1:
+            last_name = parts[1]
+
+    # 2. Use the correct keys ('company_name') from the contact dictionary.
+    company_name = contact.get('company_name', '')
+    email = contact.get('email', '')
+
+    # 3. Replace placeholders.
+    content = content.replace('{{firstname}}', first_name)
+    content = content.replace('{{lastname}}', last_name)
+    content = content.replace('{{company}}', company_name)
+    content = content.replace('{{email}}', email)
+
+    # 4. Convert plain text newlines to HTML line breaks.
+    content_with_br = content.replace('\n', '<br>') # <-- THE FIX IS HERE
+
+    return content_with_br.strip()
+# --- End of function ---
+
+
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(60.0, process_due_steps.s(), name='check for due emails every 60s')
 
 @celery.task
 def process_due_steps():
-    logger.info("Scheduler task started: Fetching due email steps...")
-    due_steps = get_due_steps()
+    now_utc = datetime.utcnow()
+    due_steps = get_due_steps_for_utc_time(now_utc)
     if not due_steps:
-        logger.info("No due steps found.")
         return
 
     bounced_emails = get_bounced_emails()
     replied_emails = get_replied_emails()
 
     for step in due_steps:
-        logger.info(f"Processing step ID {step['id']} for sequence {step['sequence_id']}")
-        
         update_step_status(step['id'], 'processing')
-
         smtp_config = get_smtp_config_by_id(step['config_id'])
         if not smtp_config:
-            logger.error(f"SMTP config not found for step {step['id']}. Skipping.")
             update_step_status(step['id'], 'failed')
             continue
 
         contacts = get_contacts_for_list(step['list_id'])
         for contact in contacts:
             if contact['email'] in bounced_emails or contact['email'] in replied_emails:
-                logger.info(f"Skipping {contact['email']} for sequence {step['sequence_id']} (bounced/replied).")
                 continue
-
+            
+            personalized_subject, personalized_body, in_reply_to, references = None, None, None, None
+            
             try:
-                # --- MODIFICATION START: Threading Logic ---
-                in_reply_to = None
-                references = None
-                
-                # Default to the current campaign's subject
-                personalized_subject = step['campaign_subject'].format(
-                    name=contact['name'],
-                    company_name=contact['company_name'],
-                    location=contact['location']
-                )
+                campaign_id_for_log = step.get('campaign_id')
+                from_name = smtp_config.get('from_name', '')
+                from_email = smtp_config.get('from_email', '')
+                to_email = contact['email']
 
-                # Default to the current campaign's body
-                personalized_body = step['campaign_body'].format(
-                    name=contact['name'],
-                    company_name=contact['company_name'],
-                    location=contact['location']
-                )
-                
-                # Rebuild the entire email body, including the reply chain
-                if step['is_re_reply']:
+                if step['step_number'] == 1:
+                    personalized_subject = _personalize_content(step['campaign_subject'], contact)
+                    personalized_body = _personalize_content(step['campaign_body'], contact)
+                else:
                     last_email = get_last_sent_email_for_contact(step['sequence_id'], contact['id'])
                     
-                    if last_email:
-                        in_reply_to = last_email['message_id']
-                        last_references = last_email.get('references') or last_email['message_id']
-                        references = f"{last_references} {in_reply_to}"
+                    if last_email and last_email.get('message_id'):
+                        original_subject = last_email.get('subject', '')
+                        
+                        personalized_subject = (
+                            f"Re: {original_subject}" if not original_subject.lower().startswith('re:') else original_subject
+                        )
 
-                        # Add "Re:" to the subject if it's not already there
-                        if not personalized_subject.lower().startswith('re:'):
-                            personalized_subject = f"Re: {personalized_subject}"
-
-                        # Build the quoted HTML block
-                        original_sent_at = last_email['sent_at'].strftime('%d %b %Y %H:%M') if last_email.get('sent_at') else 'N/A'
-                        from_name = smtp_config.get('from_name', smtp_config['from_email'])
-                        to_name = contact.get('name', contact.get('email', ''))
-
-                        quoted_html = f"""
-                            <br>
-                            <div style="font-size: 10pt; font-family: Tahoma, 'sans-serif';">
-                                <hr style="display:inline-block;width:98%;border-style:solid;border-width:1px;border-color:#E1E1E1;">
-                                <b>From:</b> {from_name}<br>
-                                <b>Sent:</b> {original_sent_at}<br>
-                                <b>To:</b> {to_name} &lt;{contact['email']}&gt;<br>
-                                <b>Subject:</b> {last_email['subject']}<br>
-                            </div>
-                            <br>
-                            <div style="background-color:#EFEFEF; padding: 10px; border: 1px solid #CCCCCC;">
-                                {last_email['campaign_body']}
-                            </div>
+                        original_from = f"{last_email.get('from_name')} <{last_email.get('from_email')}>"
+                        original_sent = last_email.get('sent_at').strftime('%d %B %Y %H:%M')
+                        original_to = last_email.get('to_email')
+                        
+                        quote_header = (
+                            f'<div style="border-top: 1px solid #E1E1E1; margin-top: 20px; padding-top: 10px;">'
+                            f'<b>From:</b> {original_from}<br>'
+                            f'<b>Sent:</b> {original_sent}<br>'
+                            f'<b>To:</b> {original_to}<br>'
+                            f'<b>Subject:</b> {original_subject}'
+                            f'</div>'
+                        )
+                        
+                        reply_content = _personalize_content(step['reply_body'], contact)
+                        
+                        personalized_body = f"""
+                        <p>{reply_content}</p>
+                        <br>
+                        {quote_header}
+                        <blockquote style="border-left: 2px solid #ccc; padding-left: 10px; margin-left: 5px; color: #666;">
+                        {last_email.get('body', '')}
+                        </blockquote>
                         """
-                        # Combine the new content with the quoted content
-                        personalized_body += quoted_html
+
+                        in_reply_to = last_email.get('message_id')
+                        parent_references = last_email.get('references')
+                        references = f"{parent_references} {in_reply_to}" if parent_references else in_reply_to
+                    else:
+                        logger.warning(f"Could not find previous email for {contact['email']}. Sending as new thread.")
+                        personalized_subject = _personalize_content("Re: Following up", contact)
+                        personalized_body = _personalize_content(step['reply_body'], contact)
                 
-                # Pass the headers and the new, combined HTML body to the sender
-                message_id, final_references = send_email(smtp_config, contact['email'], personalized_subject, personalized_body, in_reply_to, references)
-                
+                if not personalized_subject or not personalized_body:
+                    continue
+
+                message_id, final_references, final_body = send_email(
+                    smtp_config, to_email, personalized_subject, personalized_body, in_reply_to, references
+                )
+
                 if message_id:
                     SentEmail.log_email(
-                        user_id=step['user_id'], 
-                        contact_id=contact['id'], 
-                        subject=personalized_subject, 
-                        status='sent', 
-                        campaign_id=step['campaign_id'], 
-                        message_id=message_id, 
-                        references=final_references,
-                        sequence_id=step['sequence_id'],
-                        step_id=step['id']
+                        user_id=step['user_id'], contact_id=contact['id'], subject=personalized_subject, 
+                        status='sent', campaign_id=campaign_id_for_log, message_id=message_id, 
+                        references=final_references, sequence_id=step['sequence_id'], step_id=step['id'],
+                        body=final_body, from_name=from_name, from_email=from_email, to_email=to_email
                     )
-                    logger.info(f"Email sent to {contact['email']} for step {step['id']}")
-                else:
-                    raise Exception("send_email function failed to return a message_id")
-
             except Exception as e:
-                logger.error(f"Failed to send email to {contact['email']} for step {step['id']}: {e}")
-                SentEmail.log_email(
-                    user_id=step['user_id'], 
-                    contact_id=contact['id'], 
-                    subject=personalized_subject, 
-                    status='failed', 
-                    campaign_id=step['campaign_id'],
-                    sequence_id=step['sequence_id'],
-                    step_id=step['id']
-                )
-                # --- MODIFICATION END ---
+                logger.error(f"Failed to process email for {contact['email']} in step {step['id']}: {e}")
+            finally:
+                logger.info("Waiting for 5 seconds...")
+                time.sleep(5)
         
-        # --- FIX: Ensure this is correctly outside the inner 'for' loop but inside the outer 'for' loop.
         update_step_status(step['id'], 'sent')
-        logger.info(f"Finished processing step {step['id']}.")

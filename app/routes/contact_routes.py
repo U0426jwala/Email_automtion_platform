@@ -6,7 +6,10 @@ from app.models.contact import (
     update_list_records_count, delete_contact_by_id, get_list_by_id,
     delete_list_by_id
 )
-from app.utils.csv_processor import process_csv
+# --- MODIFICATION START: Import the new validation function ---
+from app.utils.csv_processor import validate_csv_data
+# --- MODIFICATION END ---
+from app.utils.email_validator import check_email
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -14,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 contact_bp = Blueprint('contact', __name__)
 
+# ... (keep the other routes like lists, download_sample, delete_list the same) ...
 @contact_bp.route('/lists', methods=['GET'])
 @login_required
 def lists():
@@ -44,6 +48,7 @@ def delete_list(list_id):
 
     return redirect(url_for('contact.lists'))
 
+# --- MODIFICATION START: The upload logic is completely new ---
 @contact_bp.route('/upload_contacts', methods=['POST'])
 @login_required
 def upload_contacts_file():
@@ -53,24 +58,42 @@ def upload_contacts_file():
     if not list_name or not csv_file:
         return jsonify({'message': 'List name and CSV file are required.'}), 400
 
+    # Step 1: Validate the entire CSV file first
+    is_valid, data_or_errors = validate_csv_data(csv_file)
+
+    if not is_valid:
+        # The file has errors, so reject the upload
+        error_message = "Upload failed. Please fix the following errors: " + ", ".join(data_or_errors)
+        logger.error(f"CSV Upload Failed for user {current_user.id}: {error_message}")
+        return jsonify({'message': error_message}), 400
+
+    # Step 2: If validation passed, create the list
     list_id = create_list(list_name, current_user.id)
     if not list_id:
         return jsonify({'message': 'Failed to create list. A list with this name may already exist.'}), 400
 
-    try:
-        saved, skipped, errors = process_csv(csv_file, list_id)
-        update_list_records_count(list_id)
-        
-        message = f"Uploaded {saved} contacts. Skipped {skipped} duplicates."
-        if errors:
-            message += f" Encountered {len(errors)} errors."
+    # Step 3: Save the validated contacts
+    saved_count = 0
+    skipped_count = 0 # For duplicates
+    valid_contacts = data_or_errors # The data is in this variable if validation passed
 
-        return jsonify({'message': message}), 200
+    for contact_data in valid_contacts:
+        if save_contact(list_id, **contact_data):
+            saved_count += 1
+        else:
+            skipped_count += 1 # This contact was a duplicate in the database
 
-    except Exception as e:
-        logger.error(f"Error during CSV processing: {e}")
-        return jsonify({'message': f"An unexpected error occurred: {e}"}), 500
+    update_list_records_count(list_id)
+    
+    message = f"Successfully uploaded {saved_count} contacts."
+    if skipped_count > 0:
+        message += f" Skipped {skipped_count} duplicates."
+    
+    return jsonify({'message': message}), 200
+# --- MODIFICATION END ---
 
+
+# ... (keep the other routes like add_contact, view_contacts, delete_contact the same) ...
 @contact_bp.route('/add_contact/<int:list_id>', methods=['GET', 'POST'])
 @login_required
 def add_contact(list_id):
@@ -80,19 +103,29 @@ def add_contact(list_id):
         return redirect(url_for('contact.lists'))
 
     if request.method == 'POST':
-        name = request.form.get('name')
-        email = request.form.get('email')
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
         location = request.form.get('location')
         company_name = request.form.get('company_name')
 
-        if not name or not email:
-            flash('Name and Email are required fields.', 'error')
+        errors = []
+        if not name:
+            errors.append('Name is a required field.')
+        
+        if not email:
+            errors.append('Email is a required field.')
+        elif not check_email(email):
+            errors.append('The email address provided is not valid.')
+
+        if errors:
+            for error in errors:
+                flash(error, 'error')
         elif save_contact(list_id, name, email, location, company_name):
             update_list_records_count(list_id)
             flash(f"Contact '{name}' added successfully!", 'success')
             return redirect(url_for('contact.view_contacts', list_id=list_id))
         else:
-            flash('Failed to add contact. The email might already exist.', 'error')
+            flash('Failed to add contact. The email might already exist in this list.', 'error')
 
     return render_template('add_contact.html', list_id=list_id, list_details=list_details)
 

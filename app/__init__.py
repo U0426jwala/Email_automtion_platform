@@ -4,10 +4,28 @@ from flask_login import LoginManager
 from .config import Config
 from .models.user import User
 from .celery_app import create_celery_app
+import pytz # <-- Import the timezone library
+
+# --- ADD THIS FUNCTION ---
+
+
+def format_datetime_ist(value, format='%Y-%m-%d %H:%M'):
+    """Jinja filter to convert a UTC datetime object from the database back to IST for display."""
+    utc_tz = pytz.utc
+    local_tz = pytz.timezone('Asia/Kolkata')
+
+    if value.tzinfo is None:
+        value = utc_tz.localize(value)
+
+    local_dt = value.astimezone(local_tz)
+    return local_dt.strftime(format)
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # --- REGISTER THE NEW FILTER WITH THE APP ---
+    app.jinja_env.filters['datetime_ist'] = format_datetime_ist
 
     app.celery = create_celery_app(app)
 
