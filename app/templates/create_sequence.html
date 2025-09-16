@@ -2,12 +2,25 @@
 
 {% block title %}Create New Sequence{% endblock %}
 
+{% block head_extra %}
+<style>
+    /* Styles from create_campaign.html for editor buttons */
+    .variable-buttons { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+    .variable-buttons .btn { background-color: #eaf4ff; color: #3498db; }
+    .variable-buttons .btn:hover { background-color: #d4e9ff; }
+    .btn { border: none; padding: 0.75rem 1.25rem; border-radius: 5px; font-weight: 500; cursor: pointer; transition: background-color 0.3s; text-decoration: none; display: inline-flex; align-items: center; }
+    .btn i { margin-right: 0.5rem; }
+
+    /* CKEditor Decoupled Build Styling */
+    .ckeditor-toolbar-container { border-radius: 5px 5px 0 0; border: 1px solid #c4c4c4; border-bottom: none; }
+    .ckeditor-editable-container { border-radius: 0 0 5px 5px; border: 1px solid #c4c4c4; min-height: 150px; padding: 0 1rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <style>
     /* (Other styles) */
     .step-card { border: 1px solid #ddd; padding: 1.5rem; border-radius: var(--border-radius); margin-top: 1.5rem; background-color: #fdfdfd; }
-    .email-reply-editor { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; margin-top: 1rem; background-color: #fff; }
-    .email-reply-editor textarea { border: none; outline: none; resize: vertical; width: 100%; min-height: 150px; padding: 0; font-family: inherit; font-size: 1rem; }
     .quoted-reply-header { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; font-size: 0.9rem; color: #666; }
 
     /* --- Toggle Switch CSS --- */
@@ -19,20 +32,6 @@
     .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
     input:checked + .slider { background-color: #007bff; }
     input:checked + .slider:before { transform: translateX(22px); }
-
-    /* --- CSS for Placeholders --- */
-    .placeholder-buttons {
-        margin-top: 0.5rem;
-        margin-bottom: 0.5rem;
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-    .placeholder-btn {
-        font-size: 0.8rem;
-        padding: 0.2rem 0.6rem;
-    }
 </style>
 
 <div class="page-header">
@@ -40,7 +39,7 @@
 </div>
 
 <div class="card">
-    <form method="POST">
+    <form id="sequence-form" method="POST">
         <div class="form-group">
             <label for="sequence_name">Sequence Name</label>
             <input type="text" class="form-control" id="sequence_name" name="sequence_name" required placeholder="e.g., New Client Onboarding">
@@ -95,34 +94,52 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    let stepCounter = 1;
+<script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/decoupled-document/ckeditor.js"></script>
 
-    function insertPlaceholder(textareaId, placeholder) {
-        const textarea = document.getElementById(textareaId);
-        if (!textarea) return;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const before = text.substring(0, start);
-        const after = text.substring(end, text.length);
-        textarea.value = before + placeholder + after;
-        textarea.selectionStart = textarea.selectionEnd = start + placeholder.length;
-        textarea.focus();
+<script>
+    // --- WRAP SCRIPT IN RAW BLOCK TO PREVENT JINJA ERRORS ---
+    {% raw %}
+    let stepCounter = 1;
+    const editorInstances = {}; // Object to store CKEditor instances
+
+    // Configuration for all new editor instances
+    const editorConfiguration = {
+        toolbar: {
+            items: [
+                'heading', '|', 'fontSize', 'fontFamily', 'fontColor', 'fontBackgroundColor', '|',
+                'bold', 'italic', 'underline', '|', 'alignment', '|', 'numberedList', 'bulletedList', '|',
+                'link', '|', 'undo', 'redo'
+            ]
+        },
+        fontSize: { options: [ 10, 12, 14, 'default', 18, 20 ], supportAllValues: true },
+        fontFamily: {
+            options: [ 'default', 'Arial, Helvetica, sans-serif', 'Courier New, Courier, monospace',
+                       'Georgia, serif', 'Times New Roman, Times, serif', 'Verdana, Geneva, sans-serif' ],
+            supportAllValues: true
+        }
+    };
+
+    function insertVariable(stepId, variableName) {
+        const editor = editorInstances[stepId];
+        if (editor) {
+            const fullPlaceholder = `{{${variableName}}}`;
+            editor.model.change(writer => {
+                writer.insertText(fullPlaceholder, editor.model.document.selection.getFirstPosition());
+            });
+            editor.editing.view.focus();
+        }
     }
 
     function addStep() {
         stepCounter++;
         const step1CampaignSelect = document.querySelector('select[name="step[1][campaign_id]"]');
-        const selectedOption = step1CampaignSelect.options[step1CampaignSelect.selectedIndex];
-        const previousSubject = selectedOption.dataset.subject || 'Previous Email Subject';
+        const selectedOption = step1CampaignSelect ? step1CampaignSelect.options[step1CampaignSelect.selectedIndex] : null;
+        const previousSubject = selectedOption ? selectedOption.dataset.subject : 'Previous Email Subject';
 
         const container = document.getElementById('steps-container');
         const newStep = document.createElement('div');
         newStep.className = 'step-card';
         newStep.id = `step-${stepCounter}`;
-
-        const textareaId = `reply_body_${stepCounter}`;
 
         newStep.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -133,21 +150,21 @@
             <div class="form-group">
                 <label style="font-weight: 600;">Reply Content</label>
                 
-                <div class="placeholder-buttons">
-                    <small>Insert:</small>
-                    <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('${textareaId}', '{{ '{{' }}firstname}}')">First Name</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('${textareaId}', '{{ '{{' }}lastname}}')">Last Name</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn" onclick="insertPlaceholder('${textareaId}', '{{ '{{' }}company}}')">Company</button>
+                <div class="variable-buttons">
+                    <button type="button" class="btn variable-btn" onclick="insertVariable(${stepCounter}, 'First Name')"><i class="fas fa-user"></i>First Name</button>
+                    <button type="button" class="btn variable-btn" onclick="insertVariable(${stepCounter}, 'Last Name')"><i class="fas fa-user-tag"></i>Last Name</button>
+                    <button type="button" class="btn variable-btn" onclick="insertVariable(${stepCounter}, 'Email')"><i class="fas fa-at"></i>Email</button>
+                    <button type="button" class="btn variable-btn" onclick="insertVariable(${stepCounter}, 'Company')"><i class="fas fa-building"></i>Company</button>
                 </div>
 
-                <div class="email-reply-editor">
-                    <textarea id="${textareaId}" name="step[${stepCounter}][reply_body]" placeholder="Type your follow-up message here..." required></textarea>
-                     <div class="quoted-reply-header">
-                        <p style="margin:0;"><strong>From:</strong> You</p>
-                        <p style="margin:0;"><strong>Subject:</strong> Re: ${previousSubject}</p>
-                        <hr style="margin: 0.5rem 0; border-color: #e0e0e0;">
-                        <p style="margin:0;">[Previous email content will appear here]</p>
-                    </div>
+                <div id="toolbar-container-${stepCounter}" class="ckeditor-toolbar-container"></div>
+                <div id="editor-${stepCounter}" class="ckeditor-editable-container"><p></p></div>
+                <input type="hidden" name="step[${stepCounter}][reply_body]" id="body-input-${stepCounter}">
+
+                <div class="quoted-reply-header" style="display: block;">
+                    <p style="margin:0;"><strong>Subject:</strong> Re: ${previousSubject}</p>
+                    <hr style="margin: 0.5rem 0; border-color: #e0e0e0;">
+                    <p style="margin:0;">[Previous email content will appear here]</p>
                 </div>
             </div>
             <div class="form-group">
@@ -156,20 +173,60 @@
             </div>
             <div class="toggle-container">
                 <label class="switch">
-                    <input type="checkbox" name="step[${stepCounter}][is_re_reply]" checked>
+                    <input type="checkbox" name="step[${stepCounter}][is_re_reply]" checked onchange="toggleQuotedHeader(this)">
                     <span class="slider"></span>
                 </label>
                 <label class="toggle-label">Reply to Previous Email (creates a thread)</label>
             </div>
         `;
         container.appendChild(newStep);
+
+        // Initialize CKEditor on the new element
+        DecoupledEditor
+            .create(document.querySelector(`#editor-${stepCounter}`), editorConfiguration)
+            .then(editor => {
+                const toolbarContainer = document.querySelector(`#toolbar-container-${stepCounter}`);
+                toolbarContainer.appendChild(editor.ui.view.toolbar.element);
+                editorInstances[stepCounter] = editor; // Store the instance
+            })
+            .catch(error => {
+                console.error(`Error initializing editor for step ${stepCounter}:`, error);
+            });
     }
 
     function removeStep(stepId) {
         const stepToRemove = document.getElementById(`step-${stepId}`);
         if (stepToRemove) {
+            const editor = editorInstances[stepId];
+            if (editor) {
+                editor.destroy()
+                    .then(() => {
+                        delete editorInstances[stepId]; // Remove from storage
+                    })
+                    .catch(error => console.error(`Error destroying editor for step ${stepId}:`, error));
+            }
             stepToRemove.remove();
         }
     }
+
+    function toggleQuotedHeader(checkbox) {
+        const quotedHeader = checkbox.closest('.step-card').querySelector('.quoted-reply-header');
+        if (quotedHeader) {
+            quotedHeader.style.display = checkbox.checked ? 'block' : 'none';
+        }
+    }
+
+    // Add a single event listener to the form for submission
+    document.getElementById('sequence-form').addEventListener('submit', function() {
+        for (const stepId in editorInstances) {
+            const editor = editorInstances[stepId];
+            const hiddenInput = document.getElementById(`body-input-${stepId}`);
+            if (editor && hiddenInput) {
+                hiddenInput.value = editor.getData();
+            }
+        }
+    });
+
+    {% endraw %}
 </script>
 {% endblock %}

@@ -8,6 +8,9 @@
     .btn-primary { background-color: #3498db; color: white; }
     .btn-secondary { background-color: #7f8c8d; color: white; }
     .btn-danger { background-color: #e74c3c; color: white; }
+    /* Style for the new Edit button */
+    .btn-info { background-color: #17a2b8; color: white; } 
+    .btn-light { background-color: #f8f9fa; color: #343a40; border: 1px solid #dee2e6; }
     .actions-cell { display: flex; gap: 0.5rem; }
     .table-container { background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto;}
     table { width: 100%; border-collapse: collapse; text-align: left; }
@@ -41,6 +44,7 @@
                 <td>
                     <div class="actions-cell">
                         <a href="{{ url_for('campaign.preview_campaign_route', campaign_id=campaign.id) }}" class="btn btn-light">Preview</a>
+                        <a href="{{ url_for('campaign.edit_campaign_route', campaign_id=campaign.id) }}" class="btn btn-info">Edit</a>
                         <button onclick="openSendModal({{ campaign.id }}, '{{ campaign.name|e }}')" class="btn btn-secondary">Send</button>
                         <form action="{{ url_for('campaign.delete_campaign_route', campaign_id=campaign.id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this campaign? This action cannot be undone.');">
                             <button type="submit" class="btn btn-danger">Delete</button>

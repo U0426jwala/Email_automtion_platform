@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Create New Campaign - EmailFlow{% endblock %}
+{% block title %}Edit Campaign - EmailFlow{% endblock %}
 
 {% block head_extra %}
 <style>
@@ -38,25 +38,27 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Create New Email Campaign</h1>
-        <p>Craft the content for your automated emails here.</p>
+        <h1>Edit Email Campaign</h1>
+        <p>Modify the name, subject, and body of your campaign.</p>
     </div>
-    <button onclick="window.history.back()" class="btn btn-secondary">
+    <a href="{{ url_for('campaign.campaigns_list') }}" class="btn btn-secondary">
         <i class="fas fa-arrow-left"></i>Back to Campaigns
-    </button>
+    </a>
 </div>
 
 <div class="form-container">
     <h2>Campaign Details</h2>
-    <form id="campaign-form" method="POST" action="{{ url_for('campaign.create_campaign_route') }}">
+    <form id="campaign-form" method="POST" action="{{ url_for('campaign.edit_campaign_route', campaign_id=campaign.id) }}">
         <div class="form-group">
             <label for="name">Campaign Name:</label>
-            <input type="text" id="name" name="name" required placeholder="e.g., Q3 Product Update, Welcome Series Content">
+            <input type="text" id="name" name="name" required value="{{ campaign.name }}">
         </div>
+
         <div class="form-group">
             <label for="subject">Email Subject:</label>
-            <input type="text" id="subject" name="subject" required placeholder="e.g., An Exclusive Offer Just for {{ '{{First Name}}' }}">
+            <input type="text" id="subject" name="subject" required value="{{ campaign.subject }}">
         </div>
+
         <div class="form-group">
             <label>Email Body:</label>
             <div class="variable-buttons">
@@ -69,14 +71,14 @@
             
             <div id="toolbar-container"></div>
             
-            <div id="editor">
-                <p></p>
-            </div>
+            <div id="editor">{{ campaign.body | safe }}</div>
+
             <input type="hidden" name="body" id="body-input">
             
             <p style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.5rem;">Tip: Use the buttons above to insert personalization variables.</p>
         </div>
-        <button type="submit" class="submit-btn">Create Campaign</button>
+        
+        <button type="submit" class="submit-btn">Update Campaign</button>
     </form>
 </div>
 
@@ -97,9 +99,9 @@
     document.addEventListener('DOMContentLoaded', () => {
         let editorInstance; 
 
+        // New initialization for the Decoupled build with custom font options
         DecoupledEditor
             .create(document.querySelector('#editor'), {
-                // START OF CONFIGURATION CHANGES
                 toolbar: {
                     items: [
                         'heading', '|',
@@ -109,35 +111,19 @@
                         'insertTable', 'blockQuote', '|', 'undo', 'redo'
                     ]
                 },
-                // Add numeric font sizes
                 fontSize: {
-                    options: [
-                        10,
-                        12,
-                        14,
-                        'default',
-                        18,
-                        20,
-                        22
-                    ],
+                    options: [ 10, 12, 14, 'default', 18, 20, 22 ],
                     supportAllValues: true
                 },
-                // Add more font families
                 fontFamily: {
                     options: [
-                        'default',
-                        'Arial, Helvetica, sans-serif',
-                        'Courier New, Courier, monospace',
-                        'Georgia, serif',
-                        'Lucida Sans Unicode, Lucida Grande, sans-serif',
-                        'Tahoma, Geneva, sans-serif',
-                        'Times New Roman, Times, serif',
-                        'Trebuchet MS, Helvetica, sans-serif',
-                        'Verdana, Geneva, sans-serif'
+                        'default', 'Arial, Helvetica, sans-serif', 'Courier New, Courier, monospace',
+                        'Georgia, serif', 'Lucida Sans Unicode, Lucida Grande, sans-serif',
+                        'Tahoma, Geneva, sans-serif', 'Times New Roman, Times, serif',
+                        'Trebuchet MS, Helvetica, sans-serif', 'Verdana, Geneva, sans-serif'
                     ],
                     supportAllValues: true
                 }
-                // END OF CONFIGURATION CHANGES
             })
             .then(editor => {
                 editorInstance = editor;
@@ -148,6 +134,7 @@
                 console.error('Error initializing CKEditor:', error);
             });
 
+        // Update the form's hidden input before submission
         const campaignForm = document.getElementById('campaign-form');
         const bodyInput = document.getElementById('body-input');
         campaignForm.addEventListener('submit', () => {
@@ -156,6 +143,7 @@
             }
         });
         
+        // The rest of your script for the buttons
         const variableButtons = document.querySelectorAll('.variable-btn');
         variableButtons.forEach(button => {
             button.addEventListener('click', () => {

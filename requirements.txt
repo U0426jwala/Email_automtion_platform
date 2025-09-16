@@ -13,5 +13,6 @@ celery
 redis
 SQLAlchemy
 eventlet
+flask-talisman
 
 

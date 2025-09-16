@@ -164,8 +164,7 @@
             {% for list_item in lists %}
             <tr>
                 <td><a href="{{ url_for('contact.view_contacts', list_id=list_item.id) }}">{{ list_item.list_name }}</a></td>
-                <td>{{ list_item.total_records }}</td>
-                <td>{{ list_item.list_type if list_item.list_type else 'People' }}</td>
+                <td>{{ list_item.records }}</td> <td>{{ list_item.list_type if list_item.list_type else 'People' }}</td>
                 <td>{{ list_item.created_at.strftime('%d-%m-%Y %H:%M') if list_item.created_at else 'N/A' }}</td>
                 <td>{{ list_item.created_by }}</td>
                 <td class="actions-cell">

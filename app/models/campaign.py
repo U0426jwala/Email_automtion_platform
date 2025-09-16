@@ -1,4 +1,4 @@
-# app/models/campaign.py (Debugging Version)
+# app/models/campaign.py
 
 import mysql.connector
 from mysql.connector import Error
@@ -9,7 +9,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
 
 
 def create_campaign(name, subject, body, created_by):
@@ -38,7 +37,8 @@ def get_campaigns():
         return []
     try:
         with conn.cursor(dictionary=True) as cursor:
-            query = "SELECT id, name, subject, body, created_at FROM campaigns ORDER BY created_at DESC"
+            # Assuming you have a 'status' column in your table
+            query = "SELECT id, name, subject, body, created_at, 'Draft' as status FROM campaigns ORDER BY created_at DESC"
             cursor.execute(query)
             campaigns = cursor.fetchall()
             return campaigns
@@ -85,9 +85,27 @@ def delete_campaign(campaign_id):
         if conn and conn.is_connected():
             conn.close()
 
-# File: app/models/campaign.py
+# NEW FUNCTION TO UPDATE A CAMPAIGN
+def update_campaign(campaign_id, name, subject, body):
+    """Updates an existing campaign in the database."""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cursor:
+            query = "UPDATE campaigns SET name = %s, subject = %s, body = %s WHERE id = %s"
+            cursor.execute(query, (name, subject, body, campaign_id))
+            conn.commit()
+            return True
+    except Error as e:
+        logger.error(f"Error updating campaign: {e}")
+        conn.rollback()
+        return False
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
 
-# ... (add this function to the file) ...
+
 def get_all_campaigns(user_id):
     """Retrieves all campaigns created by a specific user."""
     conn = get_db_connection()
@@ -95,12 +113,13 @@ def get_all_campaigns(user_id):
         return []
     try:
         cursor = conn.cursor(dictionary=True)
-        query = "SELECT id, campaign_name FROM campaigns WHERE created_by = %s ORDER BY created_at DESC"
+        # Note: Assuming your column is 'name' not 'campaign_name' based on other functions
+        query = "SELECT id, name FROM campaigns WHERE created_by = %s ORDER BY created_at DESC"
         cursor.execute(query, (user_id,))
         campaigns = cursor.fetchall()
         return campaigns
     except Error as e:
-        logger.error(f"Error fetching all campaigns: {e}")
+        logger.error(f"Error fetching all campaigns for user: {e}")
         return []
     finally:
         if conn and conn.is_connected():
