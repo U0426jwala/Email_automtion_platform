@@ -3,6 +3,45 @@
 {% block title %}Reports Dashboard{% endblock %}
 
 {% block content %}
+    <style>
+        .stat-card--linkable {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            position: relative; /* Needed for positioning the link */
+            padding-bottom: 40px; /* Add space for the link at the bottom */
+        }
+        .stat-card--linkable:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+            cursor: pointer;
+        }
+        /* Style for the new, always-visible link */
+        .stat-card-footer-link {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.85em;
+            color: #007bff;
+            transition: background-color 0.2s;
+            border-bottom-left-radius: 8px; /* Match card's border-radius */
+            border-bottom-right-radius: 8px; /* Match card's border-radius */
+        }
+        .stat-card--linkable:hover .stat-card-footer-link {
+            background-color: #e2e6ea;
+        }
+        .stat-card-footer-link i {
+            margin-left: 5px;
+            transition: transform 0.2s;
+        }
+        .stat-card--linkable:hover .stat-card-footer-link i {
+            transform: translateX(4px);
+        }
+    </style>
     <div class="page-header">
         <div>
             <h1>Reports Dashboard</h1>
@@ -16,11 +55,17 @@
             <div class="stat-value" id="total-sent">{{ stats.total_sent }}</div>
             <div class="stat-label">Total Emails Sent</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon"><i class="fas fa-clock"></i></div>
-            <div class="stat-value" id="total-scheduled">{{ stats.total_scheduled }}</div>
-            <div class="stat-label">Emails Scheduled (Future)</div>
-        </div>
+        
+        <a href="{{ url_for('reports.future_scheduled_emails') }}" style="text-decoration: none; color: inherit;">
+            <div class="stat-card stat-card--linkable">
+                <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                <div class="stat-value" id="total-scheduled">{{ stats.total_scheduled }}</div>
+                <div class="stat-label">Emails Scheduled (Future)</div>
+                <div class="stat-card-footer-link">
+                    View Details <i class="fas fa-arrow-right"></i>
+                </div>
+            </div>
+        </a>
         <div class="stat-card">
             <div class="stat-icon"><i class="fas fa-users"></i></div>
             <div class="stat-value" id="total-contacts">{{ stats.total_contacts }}</div>
@@ -73,7 +118,7 @@
             Emails sent to these addresses have failed. The application will automatically stop sending to them.
         </p>
         <div class="table-container" style="box-shadow: none; border: 1px solid #ddd;">
-            <table style="width: 100%;">
+            <table>
                 <thead>
                     <tr>
                         <th>Email Address</th>
